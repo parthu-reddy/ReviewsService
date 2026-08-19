@@ -7,9 +7,11 @@ Guarantee system stability against extreme load and external failure via Bucket4
 - Implement interceptor tied to clustered Redis limits.
 - E.g., 100 requests / minute / user.
 
-## 3. Resilience4j Circuit Breakers
-- Wrap `RestaurantServiceClient` with `@CircuitBreaker`.
-- Define `fallbackMethod` for graceful degradation (`503 Service Unavailable`).
+## 3. Resilience4j & OpenFeign Integration
+- Explicitly enable OpenFeign circuit breakers in `application.yml`.
+- Define specific Resilience4j instances (`retry`, `circuitbreaker`, `timelimiter`) directly in `application.yml`.
+- **Fail-Fast Fallbacks:** All Feign client fallback implementations MUST throw explicit, fast-failing `RuntimeException`s (e.g. `ExternalServiceUnavailableException`) rather than silently returning default/null values, to preserve data integrity.
+- **Fallback Bean Naming:** Fallback beans MUST be prefixed with the service name or explicitly named (e.g., `@Component("reviewsRestaurantClientFallback")`) to prevent `ConflictingBeanDefinitionException` with shared library fallbacks.
 
 ## 4. Uniform Exception Handling
 - `@RestControllerAdvice` mapping:
@@ -22,7 +24,7 @@ Guarantee system stability against extreme load and external failure via Bucket4
 - Configure `DeadLetterPublishingRecoverer` for any Kafka consumer configurations.
 
 ## 6. Edge Cases & Resilience Scenarios
-- **Proxy/LB Rate Limit Blackholing:** A malicious actor could spoof IPs, or a Load Balancer might mask the true IP (showing only the LB's IP). If Bucket4j limits on the raw remote address, it will ban all legitimate users. We must accurately parse the `X-Forwarded-For` headers.
-- **Circuit Breaker Half-Open State:** Misconfiguring the timeout limits when the breaker tests connectivity (Half-Open) can cause the breaker to flap repeatedly, destabilizing downstream services further.
-- **Poison Pill Blocking Partitions:** Deterministic consumer errors (e.g. malformed JSON that will fail parsing every time it's retried) will perpetually block the Kafka partition. Spring's `DeadLetterPublishingRecoverer` is mandatory to shunt these messages to a secondary topic and allow the main stream to advance.
-- **Data Leakage in Exceptions:** Returning a raw stack trace or SQL exception in an HTTP 500 response creates severe security vulnerabilities. The global handler must heavily sanitize production errors.
+- **Proxy/LB Rate Limit Blackholing:** Parse the `X-Forwarded-For` headers accurately to avoid blocking all legitimate users via Bucket4j.
+- **Circuit Breaker Half-Open State:** Ensure proper wait duration in open state to prevent rapid flapping.
+- **Poison Pill Blocking Partitions:** Without a DLQ and a `DeadLetterPublishingRecoverer`, bad messages block partitions indefinitely.
+- **Silent Failure Cascades:** Returning default mock objects from Feign Fallbacks when an upstream service is down causes downstream math and transactions to silently corrupt data. Fallbacks must fail-fast and throw.

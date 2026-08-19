@@ -1,11 +1,13 @@
 # Phase 1 Checklist
 
 - [ ] Initialize Spring Boot 3 project via Initializr.
-- [ ] Configure `build.gradle` / `pom.xml` with dependencies listed in `plan.md` (Including Micrometer OTEL & Actuator).
-- [ ] Create the four top-level packages: `config`, `domain`, `infrastructure`, `web`.
-- [ ] Create `application.yml` and `application-dev.yml` (Set `Dev` as the active profile).
-- [ ] Set up HikariCP configuration for PostgreSQL inside the properties file.
-- [ ] Configure tracing via `management.tracing.enabled=true` and sampling probability.
-- [ ] Update `logging.pattern.level` in application properties to inject `traceId` and `spanId` (MDC).
+- [ ] Add `common-library` and all dependencies to `pom.xml` (Ensure `flyway-database-postgresql` and `commons-pool2` are explicitly included).
+- [ ] Add `maven-surefire-plugin` with `<argLine>-XX:+EnableDynamicAgentLoading -Xshare:off -Dnet.bytebuddy.experimental=true</argLine>`.
+- [ ] Create main class and annotate with `@EntityScan` and `@EnableJpaRepositories` referencing BOTH `com.fooddelivery.reviews` and `com.fooddelivery.common`.
+- [ ] Ensure `scanBasePackages` does not overlap `com.fooddelivery` and `com.fooddelivery.common`.
+- [ ] Create `application.yml` and configure `spring.config.import` for the Spring Cloud Config Server.
+- [ ] Configure `spring.data.redis.lettuce.pool.max-active` (and related pooling properties) in `application.yml`.
+- [ ] Create `application-contract-test.yml` in `src/test/resources` excluding Redis auto-configurations.
+- [ ] Configure tracing via `management.tracing.enabled=true`, OTLP endpoint, and MDC logging pattern.
 - [ ] Document Oracle as the exclusive deployment target in project README.
 - [ ] Create `mistakes_and_improvements.md` upon completion and sync lessons to `CommonMistakesDocumentation` (categorized correctly).

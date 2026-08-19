@@ -2,10 +2,10 @@
 
 - [ ] Add Bucket4j Redis dependencies.
 - [ ] Create `RateLimitInterceptor` checking buckets.
-- [ ] Add Resilience4j dependency.
-- [ ] Configure `resilience4j.circuitbreaker` settings in `application.yml`.
-- [ ] Annotate Feign Client with `@CircuitBreaker(name="restaurantService", fallbackMethod="fallback")`.
-- [ ] Implement `GlobalExceptionHandler` with `@RestControllerAdvice`.
-- [ ] Define standardized `ErrorResponse` record.
+- [ ] Enable `spring.cloud.openfeign.circuitbreaker.enabled: true` in `application.yml`.
+- [ ] Configure precise `resilience4j` blocks in `application.yml`.
+- [ ] Implement Feign fallback classes that throw fast-failing Exceptions instead of returning defaults.
+- [ ] Name Fallback components with a unique prefix (e.g., `@Component("reviewsRestaurantClientFallback")`) to avoid shared library bean collisions.
+- [ ] Implement `GlobalExceptionHandler` with `@RestControllerAdvice` mapping core exception types.
 - [ ] Configure Kafka `DefaultErrorHandler` with `DeadLetterPublishingRecoverer`.
 - [ ] Create `mistakes_and_improvements.md` upon completion and sync lessons to `CommonMistakesDocumentation` (categorized correctly).

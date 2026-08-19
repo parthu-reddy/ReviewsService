@@ -8,18 +8,17 @@ Enforce strict domain boundaries using custom validators and verify entity exist
 - Create `CreateReviewDto` encapsulating input limits (e.g. `@Size`, `@Min`, `@Max`).
 
 ## 3. Validation via OpenFeign & Contract Testing
-- Create `RestaurantServiceClient` using Spring Cloud OpenFeign.
-- Create `ValidationService` to dynamically lookup entities based on type.
-- **Consumer-Driven Contract Testing:** All Feign clients must be validated via Spring Cloud Contract (`spring-cloud-starter-contract-stub-runner`). Ensure `@AutoConfigureStubRunner` is used in tests mapped to the provider's stub artifacts (e.g., `com.fooddelivery:restaurantservice:+:stubs:8090`).
-- Use the `contract-test` profile for execution.
+- **Avoid Duplication:** Per enterprise rules, DO NOT create a new `RestaurantServiceClient`. Instead, import `com.fooddelivery.common.client.RestaurantClient` from `CommonLibrary` and use its generated DTOs.
+- Enable scanning: `@EnableFeignClients(basePackages = {"com.fooddelivery.common.client"})`.
+- **Consumer Contract Testing:** All Feign clients must be validated via Spring Cloud Contract (`spring-cloud-starter-contract-stub-runner`). Ensure `@AutoConfigureStubRunner` is used in tests alongside `@ActiveProfiles("contract-test")` to prevent context loading crashes.
+- **Provider Contract Testing:** Add `spring-cloud-starter-contract-verifier` and configure the Maven plugin so other services can safely consume our review endpoints.
 
 ## 4. Orchestration (`ReviewService`)
 - Mark as `@Transactional`.
 - Coordinates Feign validation -> JPA Save -> Aggregate math (with OCC retry) -> Outbox Event Save.
 
 ## 5. Edge Cases & Resilience Scenarios
-- **API Contract Violations:** If upstream providers change data types or drop properties, standard unit tests using `@MockBean` will pass but production will fail. Strictly enforce CDC testing to halt the build on any contract mismatch.
-- **Optimistic Locking Retry Storm:** High-velocity entities receiving simultaneous reviews will trigger locking failures. Use Spring's `@Retryable` specifically for `ObjectOptimisticLockingFailureException` with an exponential backoff.
-- **Feign Validation Latency / Cascading Failures:** If the upstream `RestaurantService` experiences high latency, synchronous validation calls will block Tomcat threads, eventually bringing down the Review Service. This validates the absolute necessity of Circuit Breakers (addressed in Phase 7) and strict read timeouts.
-- **Fail Fast Policy (Entity Existance):** If the upstream service is unavailable, do NOT assume the entity is valid. Fail fast with a `503 Service Unavailable` or `502 Bad Gateway` to prevent orphaned reviews.
-- **Data Truncation / Constraint Violations:** Very large payloads for comments or invalid ratings must be rejected natively by `@Valid` Jakarta annotations before the database transaction opens.
+- **Validation Drift (Duplicate Feign Clients):** Creating local Feign clients instead of using the `CommonLibrary` leads to contract drift and broken production logic. Always use the shared clients and OpenAPI-generated DTOs.
+- **API Contract Violations:** If upstream providers change data types, standard unit tests using `@MockBean` pass but production fails. Strictly enforce CDC testing to halt the build on mismatch.
+- **Optimistic Locking Retry Storm:** High-velocity entities receiving simultaneous reviews trigger locking failures. Use Spring's `@Retryable` specifically for `ObjectOptimisticLockingFailureException`.
+- **Fail Fast Policy (Entity Existance):** If the upstream service is unavailable, do NOT assume the entity is valid. Fail fast with a `503 Service Unavailable`.

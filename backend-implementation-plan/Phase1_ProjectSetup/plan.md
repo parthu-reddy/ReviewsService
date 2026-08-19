@@ -1,33 +1,44 @@
 # Phase 1: Project Setup and Architecture Plan
 
 ## 1. Architectural Objective
-Bootstrap a Spring Boot 3 Java 17+ microservice designed for high concurrency and DDD boundary isolation, tailored to handle generalized entity reviews. Establish robust observability and distributed tracing from day one.
+Bootstrap a Spring Boot 3 Java 17+ microservice designed for high concurrency and DDD boundary isolation, tailored to handle generalized entity reviews. Align perfectly with the enterprise architecture using common libraries and centralized configuration.
 
 ## 2. Core Dependencies
+- **Common Library** (`com.fooddelivery:common-library`)
+- **Spring Cloud Config** (`spring-cloud-starter-config`)
 - **Spring Web** (REST API)
 - **Spring Data JPA & PostgreSQL Driver** (Persistence)
-- **Spring Data Redis & Lettuce** (CQRS read caching)
+- **Flyway DB Migrations** (`flyway-core` and **CRITICAL:** `flyway-database-postgresql` for Flyway 10+)
+- **Spring Data Redis & Lettuce** (Plus **CRITICAL:** `commons-pool2` for connection pooling)
 - **Spring Kafka** (Outbox event publishing)
 - **Spring Cloud OpenFeign** (External API validation)
-- **Resilience4j** (Circuit Breakers)
-- **Bucket4j** (Rate Limiting)
+- **Resilience4j & Bucket4j** (Circuit Breakers & Rate Limiting)
 - **Validation (Jakarta)** (Input enforcement)
-- **Flyway** (Database migrations)
-- **Micrometer Tracing & Actuator** (`spring-boot-starter-actuator`, `micrometer-tracing-bridge-otel`, `micrometer-tracing-reporter-otlp`) for distributed observability.
+- **Micrometer OTEL & Actuator** (`spring-boot-starter-actuator`, `micrometer-tracing-bridge-otel`, `opentelemetry-exporter-otlp`)
+- **Swagger / OpenAPI** (`springdoc-openapi-starter-webmvc-ui` & `springdoc-openapi-maven-plugin`)
+- **Integration Test Stack** (`testcontainers`, `rest-assured`, `awaitility`, `h2`)
 
 ## 3. Package Layout (Domain-Driven)
-- `com.enterprise.reviewservice.config`: Global configurations
-- `com.enterprise.reviewservice.domain`: Entities, custom exceptions, domain events
-- `com.enterprise.reviewservice.infrastructure`: Repositories, Kafka relays, Feign clients
-- `com.enterprise.reviewservice.web`: Controllers, DTOs, custom validators, @RestControllerAdvice
+- **Base Package:** `com.fooddelivery.reviews`
+- `com.fooddelivery.reviews.config`: Global configurations & `@EnableFeignClients(basePackages = {"com.fooddelivery.common.client"})`
+- `com.fooddelivery.reviews.domain`: Entities, custom exceptions, domain events
+- `com.fooddelivery.reviews.infrastructure`: Repositories, Kafka relays
+- `com.fooddelivery.reviews.web`: Controllers, custom validators, @RestControllerAdvice
 
-## 4. Deployment, Observability, and Environment Configuration
-- **Profile:** Only deploy as the `Dev` profile for all microservices unless explicitly requested otherwise.
-- **Infrastructure:** Only use Oracle for deployment.
-- **Tracing Configuration:** Set `management.tracing.enabled=true`. In Dev profile, set `management.tracing.sampling.probability=1.0`. Enforce MDC correlation in log patterns (`%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]`).
+## 4. Main Application Class Configurations
+To properly load shared entities (like Outbox and Idempotency) from the `common-library` without crashing Spring Boot:
+- Do NOT use overlapping `scanBasePackages = {"com.fooddelivery", "com.fooddelivery.common"}`.
+- Use explicit `@EntityScan(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})`.
+- Use explicit `@EnableJpaRepositories(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})`.
 
-## 5. Edge Cases & Resilience Scenarios
-- **Dependency Conflicts:** Misaligned Spring Cloud BOMs can cause OpenFeign/Resilience4j to fail. Ensure strict version alignment with Spring Boot 3.
-- **Tomcat Thread Exhaustion:** Default Tomcat settings can easily be exhausted if external calls (like Feign) hang. We must configure aggressive timeouts natively on HTTP clients.
-- **Environment Parity & Database Collisions:** The `dev` profile must point to isolated databases (e.g., via Testcontainers) to prevent multiple engineers from polluting shared development tables.
-- **Fail Fast Policy (Financial/Core Rules):** If any startup validations fail, the application context must fail fast and not attempt to fallback to default states.
+## 5. Deployment, Observability, and Environment Configuration
+- **Profile & Infra:** Only deploy as the `Dev` profile. Only use Oracle for deployment.
+- **Config Server:** `application.yml` MUST use `spring.config.import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}`.
+- **Tracing Configuration:** Set `management.tracing.enabled=true`. In Dev profile, set `management.tracing.sampling.probability=1.0` and exporter `management.otlp.tracing.endpoint`.
+- **MDC Correlation:** Inject `traceId` and `spanId` into logging patterns.
+
+## 6. Edge Cases & Resilience Scenarios
+- **Maven Surefire Java 17+ Bug:** We MUST add `<argLine>-XX:+EnableDynamicAgentLoading -Xshare:off -Dnet.bytebuddy.experimental=true</argLine>` in the `maven-surefire-plugin`.
+- **Contract Test Context Loading:** `application-contract-test.yml` must exclude Redis auto-configurations to prevent whack-a-mole context loading failures.
+- **Flyway 10 Crash:** Booting without `flyway-database-postgresql` will cause an `Unsupported Database: PostgreSQL` crash.
+- **Redis Connection Exhaustion:** Booting Lettuce without `commons-pool2` blocks all threads under heavy load. We must explicitly define `spring.data.redis.lettuce.pool.*` configurations.
