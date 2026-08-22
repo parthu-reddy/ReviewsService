@@ -55,8 +55,11 @@ CREATE TABLE reviews_product_3 PARTITION OF reviews_product FOR VALUES WITH (MOD
 
 -- Serves the only read query we have: filter on (entity_type, entity_id) ordered by created_at DESC.
 -- Without it a hot entity sorts its whole partition on every page request.
-CREATE INDEX idx_reviews_entity_created ON reviews (entity_type, entity_id, created_at DESC, id);
+
 
 -- NOTE: outbox_events is owned by common-library's db/migration/common migrations, which ship
 -- inside the jar and are picked up by Flyway's default (recursive) classpath:db/migration scan.
 -- Creating it here made V20260817000000__add_idempotency_key_to_outbox.sql fail on startup.
+
+
+CREATE INDEX idx_reviews_entity_created ON reviews (entity_type, entity_id, created_at DESC, id);
