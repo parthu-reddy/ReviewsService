@@ -14,10 +14,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableAsync
 @EnableScheduling
 @EnableOutbox
-@SpringBootApplication(scanBasePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})
+@SpringBootApplication(
+    scanBasePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"}
+)
 @EnableFeignClients(basePackages = {"com.fooddelivery.common.client"})
-@EntityScan(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})
-@EnableJpaRepositories(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})
+@org.springframework.boot.autoconfigure.domain.EntityScan(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common.entity"})
+@org.springframework.data.jpa.repository.config.EnableJpaRepositories(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common.repository"})
 public class ReviewsApplication {
 
     public static void main(String[] args) {
