@@ -69,10 +69,10 @@ public class ReviewQueryService {
             }
         } else {
             // 3. Fallback for blocked threads
-            int retries = 5;
+            int retries = 2;
             while (retries > 0) {
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(50);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;

@@ -66,9 +66,11 @@ public class ReviewCommandService {
         // Step 1: Validate entity existence (OUTSIDE transaction)
         validateEntityExists(request.getEntityType(), request.getEntityId());
 
+        // Generate ReviewId outside transaction so retries reuse the same ID
+        UUID reviewId = UUID.randomUUID();
+
         // Step 2: Database updates (INSIDE transaction)
         return transactionTemplate.execute(status -> {
-            UUID reviewId = UUID.randomUUID();
             Review review = Review.builder()
                     .entityType(request.getEntityType())
                     .entityId(request.getEntityId())

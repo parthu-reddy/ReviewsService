@@ -104,8 +104,8 @@ public class ReviewsGlobalExceptionHandler extends ResponseEntityExceptionHandle
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalStateException(IllegalStateException ex) {
-        log.warn("Illegal state (Service Unavailable): {}", ex.getMessage());
-        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.SERVICE_UNAVAILABLE);
+        log.warn("Illegal state (Bad Request): {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(feign.FeignException.class)

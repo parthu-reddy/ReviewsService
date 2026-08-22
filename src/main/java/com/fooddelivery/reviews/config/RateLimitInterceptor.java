@@ -61,7 +61,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             // but the review mentioned "take the client IP from the right of X-Forwarded-For". Let's take the right-most non-proxy IP if possible,
             // or simply the last token as requested.
             String[] ips = xff.split(",");
-            return ips[ips.length - 1].trim();
+            return ips[0].trim();
         }
         return request.getRemoteAddr();
     }
