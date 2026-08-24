@@ -1,6 +1,5 @@
 package com.fooddelivery.reviews;
 
-import com.fooddelivery.common.outbox.config.EnableOutbox;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -13,7 +12,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableRetry
 @EnableAsync
 @EnableScheduling
-@EnableOutbox
 @SpringBootApplication(
     scanBasePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"}
 )
