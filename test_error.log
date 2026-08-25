@@ -1,0 +1,63 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< com.fooddelivery:reviews-service >------------------
+[INFO] Building reviews-service 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ reviews-service ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ reviews-service ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- exec:3.1.0:exec (check-stale-contracts) @ reviews-service ---
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ reviews-service ---
+[INFO] Copying 2 resources from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ reviews-service ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 2 source files with javac [forked debug parameters release 17] to target/test-classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe:objectFieldOffset has been called by lombok.permit.Permit
+WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+WARNING: sun.misc.Unsafe:objectFieldOffset will be removed in a future release
+WARNING: Final field fileManager in class com.sun.tools.javac.jvm.ClassWriter has been mutated reflectively by class lombok.permit.Permit in unnamed module @4bd31064
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+/Users/parthureddy/Documents/Food Delivery.nosync/ReviewsService/src/test/java/com/fooddelivery/reviews/OpenApiGenerationTest.java:[90,491] error: cannot find symbol
+  symbol:   class ManagementReactiveSecurityAutoConfiguration
+  location: package org.springframework.boot.actuate.autoconfigure.security.reactive
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  21.518 s
+[INFO] Finished at: 2026-08-25T15:52:39+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:testCompile (default-testCompile) on project reviews-service: Compilation failure
+[ERROR] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+[ERROR] WARNING: sun.misc.Unsafe:objectFieldOffset has been called by lombok.permit.Permit
+[ERROR] WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+[ERROR] WARNING: sun.misc.Unsafe:objectFieldOffset will be removed in a future release
+[ERROR] WARNING: Final field fileManager in class com.sun.tools.javac.jvm.ClassWriter has been mutated reflectively by class lombok.permit.Permit in unnamed module @4bd31064
+[ERROR] WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+[ERROR] WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+[ERROR] /Users/parthureddy/Documents/Food Delivery.nosync/ReviewsService/src/test/java/com/fooddelivery/reviews/OpenApiGenerationTest.java:[90,491] error: cannot find symbol
+[ERROR]   symbol:   class ManagementReactiveSecurityAutoConfiguration
+[ERROR]   location: package org.springframework.boot.actuate.autoconfigure.security.reactive
+[ERROR] 
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+
