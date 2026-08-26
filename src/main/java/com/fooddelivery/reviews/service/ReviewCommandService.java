@@ -152,7 +152,7 @@ public class ReviewCommandService {
                 throw new com.fooddelivery.reviews.exception.ExternalServiceUnavailableException("Received null response from identity service for driver: " + entityId);
             }
             IdentityUserDTO user = response.getBody().getData();
-            if (user.getRoles() == null || user.getRoles().stream().noneMatch(r -> r.equalsIgnoreCase("DRIVER"))) {
+            if (user.getRoles() == null || user.getRoles().stream().noneMatch(r -> r.equalsIgnoreCase(com.fooddelivery.common.enums.UserRole.DRIVER.name()))) {
                 throw new IllegalArgumentException("User is not a driver: " + entityId);
             }
         } catch (IllegalArgumentException e) {
