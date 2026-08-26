@@ -32,7 +32,7 @@ import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
     "springdoc.writer-with-default-pretty-printer=true",
     "spring.cloud.config.enabled=false",
     "eureka.client.enabled=false",
-    "spring.kafka.bootstrap-servers=localhost:9092",
+    "spring.kafka.bootstrap-servers=localhost:9092", "spring.kafka.listener.auto-startup=false", "spring.kafka.admin.fail-fast=true",
     "spring.flyway.enabled=false",    "spring.sql.init.mode=never",
     "spring.main.allow-bean-definition-overriding=true",
     "spring.jpa.hibernate.ddl-auto=none",
@@ -87,7 +87,9 @@ public class OpenApiGenerationTest {
     @org.springframework.boot.test.mock.mockito.MockBean
     private com.fooddelivery.reviews.service.ReviewCommandService reviewCommandService;
 
-    @org.springframework.boot.autoconfigure.SpringBootApplication(scanBasePackages = {"com.fooddelivery.reviews.web"}, excludeName = {"org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration", "org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration", "org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration", "org.springframework.boot.actuate.autoconfigure.security.reactive.ManagementReactiveSecurityAutoConfiguration", "org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration"})
+    @org.springframework.context.annotation.Configuration
+    @org.springframework.context.annotation.ComponentScan(basePackages = {"com.fooddelivery.reviews.web"})
+    @org.springframework.boot.autoconfigure.EnableAutoConfiguration(excludeName = {"org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration", "org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration", "org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration", "org.springframework.boot.actuate.autoconfigure.security.reactive.ManagementReactiveSecurityAutoConfiguration", "org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration"})
     static class TestApp {
     }
 
