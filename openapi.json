@@ -187,6 +187,7 @@
         }
       },
       "ReviewResponseDto" : {
+        "required" : [ "createdAt", "entityId", "entityType", "id", "rating", "userId" ],
         "type" : "object",
         "properties" : {
           "id" : {
@@ -242,6 +243,7 @@
         }
       },
       "PageMetadata" : {
+        "required" : [ "number", "size", "totalElements", "totalPages" ],
         "type" : "object",
         "properties" : {
           "size" : {
@@ -263,6 +265,7 @@
         }
       },
       "PagedModelReviewResponseDto" : {
+        "required" : [ "content" ],
         "type" : "object",
         "properties" : {
           "content" : {
@@ -299,6 +302,7 @@
         }
       },
       "ReviewAggregateDto" : {
+        "required" : [ "averageRating", "entityId", "entityType", "totalReviews" ],
         "type" : "object",
         "properties" : {
           "entityType" : {
