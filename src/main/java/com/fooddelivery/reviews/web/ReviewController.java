@@ -41,6 +41,8 @@ public class ReviewController {
      * The unique constraint (entity_type, entity_id, user_id) prevents duplicate reviews.
      * Duplicate attempts will return 409 via the GlobalExceptionHandler's DataIntegrityViolationException handler.
      */
+    /** Requires a principal, matching the default-deny chain. If review reads should be public, that is a product change, not an omission. */
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     @PostMapping
     public ResponseEntity<ApiResponse<ReviewResponseDto>> createReview(
             @Valid @RequestBody CreateReviewRequest request,
@@ -56,6 +58,8 @@ public class ReviewController {
     /**
      * Get the aggregate rating summary for an entity (from Redis cache-aside).
      */
+    /** Requires a principal, matching the default-deny chain. If review reads should be public, that is a product change, not an omission. */
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     @GetMapping("/aggregate")
     public ResponseEntity<ApiResponse<ReviewAggregateDto>> getAggregate(
             @RequestParam EntityType entityType,
@@ -70,6 +74,8 @@ public class ReviewController {
      * Get paginated reviews for an entity.
      * Page size is capped at 50 to prevent abuse.
      */
+    /** Requires a principal, matching the default-deny chain. If review reads should be public, that is a product change, not an omission. */
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
     @GetMapping
     public ResponseEntity<ApiResponse<org.springframework.data.web.PagedModel<ReviewResponseDto>>> getReviews(
             @RequestParam EntityType entityType,

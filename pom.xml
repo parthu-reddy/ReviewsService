@@ -28,6 +28,14 @@
             <groupId>com.fooddelivery</groupId>
             <artifactId>common-library</artifactId>
         </dependency>
+        <!-- EndpointAuthorizationCoverage lives in common-library's test-jar. -->
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-library</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.fooddelivery</groupId>
             <artifactId>common-library</artifactId>
