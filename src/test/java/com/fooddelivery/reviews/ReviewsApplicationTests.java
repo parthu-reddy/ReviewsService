@@ -15,6 +15,7 @@ import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_CLASS)
 @EmbeddedKafka(partitions = 1, brokerProperties = { "listeners=PLAINTEXT://localhost:9092", "port=9092" })
 class ReviewsApplicationTests {
 
