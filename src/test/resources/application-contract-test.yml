@@ -7,6 +7,11 @@ spring:
     allow-bean-definition-overriding: true
     web-application-type: none
   cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            readTimeout: 30000
     config:
       enabled: false
   datasource:
@@ -44,3 +49,9 @@ management:
     redis:
       enabled: false
 
+
+resilience4j:
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 30s
