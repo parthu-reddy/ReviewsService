@@ -65,15 +65,6 @@ jobs:
           username: ${{ secrets.OCIR_USERNAME }}
           password: ${{ secrets.OCIR_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ReviewsService/Dockerfile
-          push: true
-          tags: hyd.ocir.io/axekmbadoczl/food-delivery/reviews-service:${{ github.sha }}
-          platforms: linux/arm64
-
       - name: Checkout Deployment Repo
         uses: actions/checkout@v5
         with:
@@ -82,7 +73,16 @@ jobs:
           token: ${{ secrets.CHECKOUT_TOKEN }}
 
       - name: Clean up old Docker images
-        run: python3 deps/Deployment/retention.py --apply --service reviews-service
+        run: python3 deps/Deployment/retention.py --apply --delete-all --service reviews-service
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ReviewsService/Dockerfile
+          push: true
+          tags: hyd.ocir.io/axekmbadoczl/food-delivery/reviews-service:${{ github.sha }}
+          platforms: linux/arm64
 
       - name: Update .versions file
         working-directory: deps/Deployment
