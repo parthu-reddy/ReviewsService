@@ -14,11 +14,13 @@ import java.time.Duration;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    @org.springframework.context.annotation.Lazy
-    private final LettuceBasedProxyManager<byte[]> proxyManager;
+    private final io.github.bucket4j.distributed.proxy.ProxyManager<byte[]> proxyManager;
+
+    public RateLimitInterceptor(@org.springframework.context.annotation.Lazy io.github.bucket4j.distributed.proxy.ProxyManager<byte[]> proxyManager) {
+        this.proxyManager = proxyManager;
+    }
 
     private static final BucketConfiguration CONFIGURATION = BucketConfiguration.builder()
             .addLimit(limit -> limit.capacity(100).refillGreedy(100, Duration.ofMinutes(1)))
