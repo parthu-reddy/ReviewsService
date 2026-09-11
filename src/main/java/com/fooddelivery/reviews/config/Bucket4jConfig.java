@@ -11,6 +11,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 public class Bucket4jConfig {
 
     @Bean
+    @org.springframework.context.annotation.Lazy
     public LettuceBasedProxyManager<byte[]> lettuceBasedProxyManager(org.springframework.data.redis.connection.RedisConnectionFactory connectionFactory) {
         if (!(connectionFactory instanceof org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory)) {
             throw new com.fooddelivery.reviews.exception.ExternalServiceUnavailableException("Expected LettuceConnectionFactory");

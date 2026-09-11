@@ -17,6 +17,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RateLimitInterceptor implements HandlerInterceptor {
 
+    @org.springframework.context.annotation.Lazy
     private final LettuceBasedProxyManager<byte[]> proxyManager;
 
     private static final BucketConfiguration CONFIGURATION = BucketConfiguration.builder()
