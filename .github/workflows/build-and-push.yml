@@ -16,27 +16,6 @@ jobs:
         with:
           path: ReviewsService
 
-      - name: Checkout Parent POM
-        uses: actions/checkout@v5
-        with:
-          repository: parthu-reddy/FoodDeliveryParentPOM
-          path: deps/FoodDeliveryParentPOM
-          token: ${{ secrets.CHECKOUT_TOKEN }}
-
-      - name: Checkout IdentitySigning
-        uses: actions/checkout@v5
-        with:
-          repository: parthu-reddy/IdentitySigning
-          path: deps/IdentitySigning
-          token: ${{ secrets.CHECKOUT_TOKEN }}
-
-      - name: Checkout CommonLibrary
-        uses: actions/checkout@v5
-        with:
-          repository: parthu-reddy/FoodDeliveryCommonLibrary
-          path: deps/FoodDeliveryCommonLibrary
-          token: ${{ secrets.CHECKOUT_TOKEN }}
-
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -44,21 +23,12 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Install Shared Libraries
-        run: |
-          mvn -q -B -N install -f deps/FoodDeliveryParentPOM/pom.xml
-          mvn -q -B install -f deps/IdentitySigning/pom.xml
-
-          # Create dummy directory for typescript-generator-maven-plugin in CommonLibrary
-          mkdir -p deps/FoodDeliveryAppUI/src/types
-          mvn -q -B install -f deps/FoodDeliveryCommonLibrary/pom.xml
-
-      # Tests RUN here. This previously carried -DskipTests, so every reviews-service image was built
-      # from code this workflow had never executed. The ci-tests profile still excludes
-      # **/*Contract*Test.java -- those need every producer's stubs and belong to
-      # FoodDeliveryContracts' cross-repo job, not here.
       - name: Build Microservice
-        run: mvn -B clean package -Pci-tests -f ReviewsService/pom.xml
+        env:
+          # Classic token. The shared libraries come from GitHub Packages now
+          # instead of being rebuilt from source in this job.
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: mvn -B clean package -Pci-tests -s ReviewsService/.github/maven-settings.xml -f ReviewsService/pom.xml
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
