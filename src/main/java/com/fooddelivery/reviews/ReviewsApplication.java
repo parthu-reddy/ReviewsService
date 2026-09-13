@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     scanBasePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"}
 )
 @EnableFeignClients(basePackages = {"com.fooddelivery.common.client"})
+@org.springframework.boot.context.properties.EnableConfigurationProperties(com.fooddelivery.reviews.config.ReviewProperties.class)
 @org.springframework.boot.autoconfigure.domain.EntityScan(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})
 @org.springframework.data.jpa.repository.config.EnableJpaRepositories(basePackages = {"com.fooddelivery.reviews", "com.fooddelivery.common"})
 public class ReviewsApplication {

@@ -24,25 +24,34 @@
     <dependencies>
         <dependency>
             <groupId>com.fooddelivery</groupId>
-            <artifactId>common-library</artifactId>
+            <artifactId>common-core</artifactId>
             <version>1.0-SNAPSHOT</version>
-            <type>test-jar</type>
+        </dependency>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-messaging</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-web</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-persistence</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fooddelivery</groupId>
+            <artifactId>common-test</artifactId>
+            <version>1.0-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>
 
 
-        <dependency>
-            <groupId>com.fooddelivery</groupId>
-            <artifactId>common-library</artifactId>
-        </dependency>
         
-        <dependency>
-            <groupId>com.fooddelivery</groupId>
-            <artifactId>common-library</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <classifier>tests</classifier>
-            <scope>test</scope>
-        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -59,6 +68,21 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+            <exclusions>
+                <!-- zstd and snappy ship native binaries for every platform (7.8 MB combined) and are
+                     only loaded when a message is actually compressed with them. No compression.type
+                     is configured anywhere in this platform, and ReviewsService has no @KafkaListener
+                     - it only produces review-events - so nothing here can meet a compressed message.
+                     If a compression.type is ever set on this producer, put these back first. -->
+                <exclusion>
+                    <groupId>com.github.luben</groupId>
+                    <artifactId>zstd-jni</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.xerial.snappy</groupId>
+                    <artifactId>snappy-java</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -157,6 +181,18 @@
             <artifactId>spring-kafka-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-contract-verifier</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Consumer side. ReviewsService cannot decide eligibility without CustomerApplication's
+             review-context response, and that call had no contract on either side. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+            <scope>test</scope>
+        </dependency>
     <dependency><groupId>com.tngtech.archunit</groupId><artifactId>archunit-junit5</artifactId><version>1.3.0</version><scope>test</scope></dependency></dependencies>
 
 
@@ -165,6 +201,17 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <!-- Lombok is a compile-time annotation processor and is declared `provided`,
+                             but repackage bundles provided-scope jars anyway (a fat jar has no
+                             container to provide them). Nothing loads it at runtime. -->
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -200,6 +247,25 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-XX:+EnableDynamicAgentLoading -Xshare:off -Dnet.bytebuddy.experimental=true</argLine>
+                </configuration>
+            </plugin>
+            <!-- Producer side of the review-events contract. The payload KEYS are already shared
+                 with the consumer through EventPayloadConstants; this pins the envelope around them:
+                 the topic, the eventType header, and the JSON types. -->
+            <plugin>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+                <version>4.1.2</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <testFramework>JUNIT5</testFramework>
+                    <baseClassForTests>com.fooddelivery.reviews.contract.BaseMessagingClass</baseClassForTests>
+                    <baseClassMappings>
+                        <baseClassMapping>
+                            <contractPackageRegex>.*messaging.*</contractPackageRegex>
+                            <baseClassFQN>com.fooddelivery.reviews.contract.BaseMessagingClass</baseClassFQN>
+                        </baseClassMapping>
+                    </baseClassMappings>
                 </configuration>
             </plugin>
             <plugin>

@@ -37,7 +37,9 @@ spring:
         enabled: true
         alphanumeric-ids: true
 server:
-  port: ${PORT:8099}
+  # SERVER_PORT, not PORT: compose sets SERVER_PORT=8099 and Deployment/reviews-service.yml now
+  # reads the same variable. Two names for one port is how the two files drifted apart.
+  port: ${SERVER_PORT:8099}
 eureka:
   client:
     service-url:
@@ -45,3 +47,11 @@ eureka:
 logging:
   pattern:
     level: '%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]'
+
+# The review domain's own tunables. A window exists because a rating written months later is about
+# a memory rather than a meal, and because an unbounded window leaves every order in history a
+# permanent write target.
+reviews:
+  window-days: ${REVIEWS_WINDOW_DAYS:14}
+  write-rate-limit-per-minute: ${REVIEWS_WRITE_RATE_LIMIT:10}
+  read-rate-limit-per-minute: ${REVIEWS_READ_RATE_LIMIT:100}

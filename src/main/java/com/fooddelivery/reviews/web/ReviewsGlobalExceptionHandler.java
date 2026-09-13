@@ -66,6 +66,20 @@ public class ReviewsGlobalExceptionHandler extends ResponseEntityExceptionHandle
         return new ResponseEntity<>(ApiResponse.error("Validation failed: " + ex.getMessage()), HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * A refusal the customer can act on. The status comes from the reason itself rather than being
+     * re-derived here, and the reason's name goes out as {@code errorCode} so the UI can say
+     * "the 14-day window has closed" instead of "something went wrong".
+     */
+    @ExceptionHandler(com.fooddelivery.reviews.exception.ReviewNotAllowedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleReviewNotAllowed(
+            com.fooddelivery.reviews.exception.ReviewNotAllowedException ex) {
+        log.info("Review refused ({}): {}", ex.getReason(), ex.getMessage());
+        return new ResponseEntity<>(
+                ApiResponse.error(ex.getMessage(), ex.getReason().name()),
+                ex.getReason().getStatus());
+    }
+
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleEntityNotFoundException(EntityNotFoundException ex) {
         log.warn("Entity not found: {}", ex.getMessage());

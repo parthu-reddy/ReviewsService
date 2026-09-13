@@ -56,7 +56,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewResponseDto"
+                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewDto"
                 }
               }
             }
@@ -65,15 +65,7 @@
       },
       "post" : {
         "tags" : [ "review-controller" ],
-        "operationId" : "createReview",
-        "parameters" : [ {
-          "name" : "X-User-Id",
-          "in" : "header",
-          "required" : true,
-          "schema" : {
-            "type" : "string"
-          }
-        } ],
+        "operationId" : "createReviews",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -90,7 +82,111 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ApiResponseReviewResponseDto"
+                  "$ref" : "#/components/schemas/ApiResponseListReviewDetailDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/orders/{orderId}/eligibility" : {
+      "get" : {
+        "tags" : [ "review-controller" ],
+        "operationId" : "getEligibility",
+        "parameters" : [ {
+          "name" : "orderId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseReviewEligibilityDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/me" : {
+      "get" : {
+        "tags" : [ "review-controller" ],
+        "operationId" : "getMyReviews",
+        "parameters" : [ {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "minimum" : 0,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewDetailDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/aggregates" : {
+      "get" : {
+        "tags" : [ "review-controller" ],
+        "operationId" : "getAggregates",
+        "parameters" : [ {
+          "name" : "entityType",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+          }
+        }, {
+          "name" : "entityIds",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseAggregateBatchDto"
                 }
               }
             }
@@ -131,11 +227,131 @@
           }
         }
       }
+    },
+    "/api/v1/internal/admin/reviews" : {
+      "get" : {
+        "tags" : [ "admin-review-controller" ],
+        "operationId" : "getReviewsForEntity",
+        "parameters" : [ {
+          "name" : "entityType",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+          }
+        }, {
+          "name" : "entityId",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "minimum" : 0,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewDetailDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/admin/reviews/by-user/{userId}" : {
+      "get" : {
+        "tags" : [ "admin-review-controller" ],
+        "operationId" : "getReviewsByUser",
+        "parameters" : [ {
+          "name" : "userId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "minimum" : 0,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewDetailDto"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
     "schemas" : {
       "CreateReviewRequest" : {
+        "required" : [ "entries", "orderId" ],
+        "type" : "object",
+        "properties" : {
+          "orderId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entries" : {
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewEntryRequest"
+            }
+          }
+        }
+      },
+      "ReviewEntryRequest" : {
         "required" : [ "entityId", "entityType", "rating" ],
         "type" : "object",
         "properties" : {
@@ -153,18 +369,13 @@
             "format" : "int32"
           },
           "comment" : {
-            "maxLength" : 4000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "metadata" : {
-            "maxLength" : 8000,
+            "maxLength" : 1000,
             "minLength" : 0,
             "type" : "string"
           }
         }
       },
-      "ApiResponseReviewResponseDto" : {
+      "ApiResponseListReviewDetailDto" : {
         "required" : [ "message", "success", "timestamp" ],
         "type" : "object",
         "properties" : {
@@ -178,7 +389,10 @@
             "type" : "string"
           },
           "data" : {
-            "$ref" : "#/components/schemas/ReviewResponseDto"
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewDetailDto"
+            }
           },
           "timestamp" : {
             "type" : "string",
@@ -186,8 +400,8 @@
           }
         }
       },
-      "ReviewResponseDto" : {
-        "required" : [ "createdAt", "entityId", "entityType", "id", "rating", "userId" ],
+      "ReviewDetailDto" : {
+        "required" : [ "createdAt", "entityId", "entityType", "id", "orderId", "rating", "userId" ],
         "type" : "object",
         "properties" : {
           "id" : {
@@ -201,7 +415,14 @@
           "entityId" : {
             "type" : "string"
           },
+          "orderId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
           "userId" : {
+            "type" : "string"
+          },
+          "authorDisplayName" : {
             "type" : "string"
           },
           "rating" : {
@@ -211,16 +432,13 @@
           "comment" : {
             "type" : "string"
           },
-          "metadata" : {
-            "type" : "string"
-          },
           "createdAt" : {
             "type" : "string",
             "format" : "date-time"
           }
         }
       },
-      "ApiResponsePagedModelReviewResponseDto" : {
+      "ApiResponsePagedModelReviewDto" : {
         "required" : [ "message", "success", "timestamp" ],
         "type" : "object",
         "properties" : {
@@ -234,7 +452,7 @@
             "type" : "string"
           },
           "data" : {
-            "$ref" : "#/components/schemas/PagedModelReviewResponseDto"
+            "$ref" : "#/components/schemas/PagedModelReviewDto"
           },
           "timestamp" : {
             "type" : "string",
@@ -264,14 +482,14 @@
           }
         }
       },
-      "PagedModelReviewResponseDto" : {
+      "PagedModelReviewDto" : {
         "required" : [ "content" ],
         "type" : "object",
         "properties" : {
           "content" : {
             "type" : "array",
             "items" : {
-              "$ref" : "#/components/schemas/ReviewResponseDto"
+              "$ref" : "#/components/schemas/ReviewDto"
             }
           },
           "page" : {
@@ -279,7 +497,38 @@
           }
         }
       },
-      "ApiResponseReviewAggregateDto" : {
+      "ReviewDto" : {
+        "required" : [ "createdAt", "entityId", "entityType", "id", "rating" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityType" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+          },
+          "entityId" : {
+            "type" : "string"
+          },
+          "rating" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "comment" : {
+            "type" : "string"
+          },
+          "authorDisplayName" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ApiResponseReviewEligibilityDto" : {
         "required" : [ "message", "success", "timestamp" ],
         "type" : "object",
         "properties" : {
@@ -293,7 +542,142 @@
             "type" : "string"
           },
           "data" : {
-            "$ref" : "#/components/schemas/ReviewAggregateDto"
+            "$ref" : "#/components/schemas/ReviewEligibilityDto"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ReviewEligibilityDto" : {
+        "required" : [ "orderId", "reviewable", "targets" ],
+        "type" : "object",
+        "properties" : {
+          "orderId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "reviewable" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "type" : "string",
+            "enum" : [ "ORDER_NOT_FOUND", "NOT_YOUR_ORDER", "ORDER_NOT_DELIVERED", "REVIEW_WINDOW_CLOSED", "TARGET_NOT_ON_ORDER", "ALREADY_REVIEWED", "DUPLICATE_ENTRY" ]
+          },
+          "reasonDetail" : {
+            "type" : "string"
+          },
+          "windowClosesAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "targets" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewTargetDto"
+            }
+          }
+        }
+      },
+      "ReviewTargetDto" : {
+        "required" : [ "alreadyReviewed", "displayName", "entityId", "entityType" ],
+        "type" : "object",
+        "properties" : {
+          "entityType" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+          },
+          "entityId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "alreadyReviewed" : {
+            "type" : "boolean"
+          },
+          "existingRating" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "existingComment" : {
+            "type" : "string"
+          },
+          "existingReviewedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ApiResponsePagedModelReviewDetailDto" : {
+        "required" : [ "message", "success", "timestamp" ],
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/PagedModelReviewDetailDto"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PagedModelReviewDetailDto" : {
+        "required" : [ "content" ],
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewDetailDto"
+            }
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "AggregateBatchDto" : {
+        "required" : [ "aggregates", "entityType" ],
+        "type" : "object",
+        "properties" : {
+          "entityType" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+          },
+          "aggregates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewAggregateDto"
+            }
+          }
+        }
+      },
+      "ApiResponseAggregateBatchDto" : {
+        "required" : [ "message", "success", "timestamp" ],
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/AggregateBatchDto"
           },
           "timestamp" : {
             "type" : "string",
@@ -318,6 +702,28 @@
           },
           "averageRating" : {
             "type" : "number"
+          }
+        }
+      },
+      "ApiResponseReviewAggregateDto" : {
+        "required" : [ "message", "success", "timestamp" ],
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/ReviewAggregateDto"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
           }
         }
       }

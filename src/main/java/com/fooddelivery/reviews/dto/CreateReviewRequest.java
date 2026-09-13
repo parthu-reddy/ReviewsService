@@ -1,45 +1,42 @@
 package com.fooddelivery.reviews.dto;
 
-import com.fooddelivery.reviews.enums.EntityType;
-import com.fooddelivery.reviews.validator.ValidJson;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import java.util.List;
+import java.util.UUID;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Every review a customer is making about one order, submitted together.
+ *
+ * <p>Batched deliberately. A review cannot be edited once written, so a half-accepted submission
+ * would be permanently wrong — the customer could never repair the entries that failed. One request
+ * means one eligibility resolution and one transaction: all entries commit, or none do.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateReviewRequest {
 
-    @NotNull(message = "Entity type is required")
-    private EntityType entityType;
-
-    @NotBlank(message = "Entity ID is required")
-    private String entityId;
-
-    @NotNull(message = "Rating is required")
-    @Min(value = 1, message = "Rating must be at least 1")
-    @Max(value = 5, message = "Rating must be at most 5")
-    private Integer rating;
-
-    @Size(max = 4000, message = "Comment must not exceed 4000 characters")
-    private String comment;
+    @NotNull(message = "Order ID is required")
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private UUID orderId;
 
     /**
-     * Optional JSONB metadata (e.g., order ID, photos, tags).
-     * Stored as a raw JSON string.
+     * Bounded at 20: the largest possible target set is one outlet, one driver and every distinct
+     * item on the order, and an order with eighteen distinct dishes is already an outlier.
      */
-    @Size(max = 8000, message = "Metadata must not exceed 8000 characters")
-    @ValidJson(message = "Metadata must be a valid JSON string")
-    private String metadata;
+    @NotEmpty(message = "At least one review entry is required")
+    @Size(max = 20, message = "At most 20 entries may be submitted at once")
+    @Valid
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    private List<ReviewEntryRequest> entries;
 }

@@ -1,10 +1,14 @@
 name: Build and Push Docker Image
 
+# Two jobs on purpose. `build` needs Java, Maven and three sibling repos; `image` needs none of them
+# -- the Dockerfile only copies a jar someone else produced. Splitting them means a base-image rebuild
+# no longer recompiles the service, and the jar that ships is provably the one the tests ran against.
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build:
+    name: Build and test jar
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Microservice
@@ -18,7 +22,7 @@ jobs:
           repository: parthu-reddy/FoodDeliveryParentPOM
           path: deps/FoodDeliveryParentPOM
           token: ${{ secrets.CHECKOUT_TOKEN }}
-          
+
       - name: Checkout IdentitySigning
         uses: actions/checkout@v5
         with:
@@ -44,13 +48,42 @@ jobs:
         run: |
           mvn -q -B -N install -f deps/FoodDeliveryParentPOM/pom.xml
           mvn -q -B install -f deps/IdentitySigning/pom.xml
-          
+
           # Create dummy directory for typescript-generator-maven-plugin in CommonLibrary
           mkdir -p deps/FoodDeliveryAppUI/src/types
           mvn -q -B install -f deps/FoodDeliveryCommonLibrary/pom.xml
 
+      # Tests RUN here. This previously carried -DskipTests, so every reviews-service image was built
+      # from code this workflow had never executed. The ci-tests profile still excludes
+      # **/*Contract*Test.java -- those need every producer's stubs and belong to
+      # FoodDeliveryContracts' cross-repo job, not here.
       - name: Build Microservice
-        run: mvn -B clean package -Pci-tests -DskipTests -f ReviewsService/pom.xml
+        run: mvn -B clean package -Pci-tests -f ReviewsService/pom.xml
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviews-service-jar
+          path: ReviewsService/target/*-SNAPSHOT.jar
+          if-no-files-found: error
+          retention-days: 1
+
+  image:
+    name: Build and push image
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # Only the Dockerfile is needed from this repo; the jar arrives from the build job.
+      - name: Checkout Microservice
+        uses: actions/checkout@v5
+        with:
+          path: ReviewsService
+
+      - name: Download jar
+        uses: actions/download-artifact@v4
+        with:
+          name: reviews-service-jar
+          path: ReviewsService/target
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -89,7 +122,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           MAX_RETRIES=5
           for i in $(seq 1 $MAX_RETRIES); do
             git pull --rebase origin main
@@ -107,17 +140,17 @@ jobs:
             fi
 
             git commit -am "Update ${TAG_VAR} with new image tag"
-            
+
             if git push origin HEAD:main; then
               echo "Successfully updated .versions!"
               break
             fi
-            
+
             if [ $i -eq $MAX_RETRIES ]; then
               echo "Failed to push after $MAX_RETRIES attempts."
               exit 1
             fi
-            
+
             git reset --hard HEAD~1
             git pull --rebase origin main
             sleep $((1 + RANDOM % 5))

@@ -1,71 +1,104 @@
 package com.fooddelivery.reviews.config;
 
 import io.github.bucket4j.BucketConfiguration;
-import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.bucket4j.ConsumptionProbe;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fooddelivery.common.constants.HeaderConstants;
+import com.fooddelivery.common.dto.ApiResponse;
+
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
+/**
+ * Per-principal rate limiting.
+ *
+ * <p>Keyed on the authenticated user, not on {@code X-Forwarded-For}. That header is set by the
+ * client; the gateway appends to it rather than replacing it, so keying on its first element meant
+ * a caller could pick a fresh bucket per request by writing a different value. Behind the gateway
+ * the identity is already established — {@code GlobalJwtAuthFilter} strips inbound {@code X-User-*}
+ * headers and re-stamps them from a verified JWT — so it is both cheaper and honest to use it.
+ *
+ * <p>The remote address remains the key for the rare unauthenticated request, which is the only
+ * case where there is nothing better.
+ */
 @Slf4j
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    private final io.github.bucket4j.distributed.proxy.ProxyManager<byte[]> proxyManager;
+    private final ProxyManager<byte[]> proxyManager;
+    private final ObjectMapper objectMapper;
+    private final BucketConfiguration writeConfiguration;
+    private final BucketConfiguration readConfiguration;
 
-    public RateLimitInterceptor(@org.springframework.context.annotation.Lazy io.github.bucket4j.distributed.proxy.ProxyManager<byte[]> proxyManager) {
+    public RateLimitInterceptor(@Lazy ProxyManager<byte[]> proxyManager,
+                                ObjectMapper objectMapper,
+                                ReviewProperties properties) {
         this.proxyManager = proxyManager;
+        this.objectMapper = objectMapper;
+        // Writes are far scarcer than reads: a customer submits reviews for an order once, while a
+        // single restaurant page issues several aggregate and list reads. One bucket for both would
+        // either throttle browsing or leave review spam unbounded.
+        this.writeConfiguration = BucketConfiguration.builder()
+                .addLimit(limit -> limit
+                        .capacity(properties.getWriteRateLimitPerMinute())
+                        .refillGreedy(properties.getWriteRateLimitPerMinute(), Duration.ofMinutes(1)))
+                .build();
+        this.readConfiguration = BucketConfiguration.builder()
+                .addLimit(limit -> limit
+                        .capacity(properties.getReadRateLimitPerMinute())
+                        .refillGreedy(properties.getReadRateLimitPerMinute(), Duration.ofMinutes(1)))
+                .build();
     }
 
-    private static final BucketConfiguration CONFIGURATION = BucketConfiguration.builder()
-            .addLimit(limit -> limit.capacity(100).refillGreedy(100, Duration.ofMinutes(1)))
-            .build();
-
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String clientIp = getClientIp(request);
-        
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+            throws Exception {
+        boolean isWrite = !HttpMethod.GET.matches(request.getMethod());
+        String principal = resolvePrincipal(request);
+        String bucketKey = (isWrite ? "reviews:w:" : "reviews:r:") + principal;
+
         try {
-            var bucket = proxyManager.builder().build(clientIp.getBytes(), CONFIGURATION);
-            
-            io.github.bucket4j.ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+            var bucket = proxyManager.builder()
+                    .build(bucketKey.getBytes(StandardCharsets.UTF_8),
+                            isWrite ? writeConfiguration : readConfiguration);
+
+            ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
             if (probe.isConsumed()) {
                 return true;
             }
 
-            log.warn("Rate limit exceeded for IP: {}", clientIp);
+            log.warn("Rate limit exceeded for principal={} write={}", principal, isWrite);
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json");
-            long waitForRefill = probe.getNanosToWaitForRefill() / 1_000_000_000;
-            response.setHeader("Retry-After", String.valueOf(waitForRefill));
-            
-            com.fooddelivery.common.dto.ApiResponse<Void> apiResponse = com.fooddelivery.common.dto.ApiResponse.error(
-                    "Too many requests. Please try again later.");
-            response.getWriter().write(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(apiResponse));
+            response.setHeader("Retry-After",
+                    String.valueOf(probe.getNanosToWaitForRefill() / 1_000_000_000));
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    ApiResponse.error("Too many requests. Please try again later.", "RATE_LIMITED")));
             return false;
-            
+
         } catch (Exception e) {
-            log.error("Redis rate limiter failed, failing open for IP: {}", clientIp, e);
-            // Fail open on Redis connectivity issues so service stays up
+            // Fail open on a Redis outage. A rate limiter that takes the service down with it has
+            // converted a throttle into an availability dependency.
+            log.error("Redis rate limiter failed, failing open for principal: {}", principal, e);
             return true;
         }
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isEmpty()) {
-            // Take the client IP which is the first one in the XFF list, or the right-most depending on the trusted proxy setup.
-            // Usually the right-most proxy adds the original client IP to the right or left. We'll split and take the first for typical scenarios, 
-            // but the review mentioned "take the client IP from the right of X-Forwarded-For". Let's take the right-most non-proxy IP if possible,
-            // or simply the last token as requested.
-            String[] ips = xff.split(",");
-            return ips[0].trim();
+    private String resolvePrincipal(HttpServletRequest request) {
+        String userId = request.getHeader(HeaderConstants.HEADER_USER_ID);
+        if (userId != null && !userId.isBlank()) {
+            return "u:" + userId;
         }
-        return request.getRemoteAddr();
+        return "ip:" + request.getRemoteAddr();
     }
 }
