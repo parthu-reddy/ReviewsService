@@ -1,0 +1,19 @@
+-- Drops the unused `metadata` column from `reviews`.
+--
+-- `V1__init_schema.sql` creates `metadata JSONB`. The 2026-09-11 rewrite made a review an immutable,
+-- order-scoped statement with a fixed shape, and `Review` stopped mapping the column; nothing in the
+-- service reads or writes it.
+--
+-- Held back at the time under the expand/contract rule in Deployment/SCHEMA_POLICY.md: the deployed
+-- image still mapped the column, so dropping it would have made a rollback fail `ddl-auto: validate`
+-- at boot. The owner confirmed on 2026-09-13 that nothing is in production and the next deployment
+-- starts from an empty schema, so there is no older image to roll back to and the hold no longer
+-- applies.
+--
+-- Written as a forward migration rather than by editing V1, deliberately. V1 has already run against
+-- development databases; editing it would change its checksum and `validate-on-migrate` would fail
+-- there on the next run. On a genuinely empty database this creates the column and drops it again a
+-- moment later, which costs nothing and keeps applied migrations immutable.
+--
+-- IF EXISTS so this is idempotent against a database where it has somehow already gone.
+ALTER TABLE reviews DROP COLUMN IF EXISTS metadata;
