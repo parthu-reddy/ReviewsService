@@ -7,7 +7,6 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.contract.stubrunner.spring.AutoConfigureStubRunner;
-import org.springframework.cloud.contract.stubrunner.spring.StubRunnerProperties;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.fooddelivery.common.client.CustomerServiceClient;
@@ -38,8 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @SpringBootTest(classes = ReviewsCustomerContractConsumerTest.TestConfig.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = "stubrunner.idsToServiceIds.food-delivery-backend=customer-service")
-@AutoConfigureStubRunner(ids = "com.fooddelivery:food-delivery-backend:+:stubs",
-        stubsMode = StubRunnerProperties.StubsMode.LOCAL)
+@AutoConfigureStubRunner(ids = "com.fooddelivery:food-delivery-backend:+:stubs")
 public class ReviewsCustomerContractConsumerTest {
 
     /** The order the published contract is written against. */
