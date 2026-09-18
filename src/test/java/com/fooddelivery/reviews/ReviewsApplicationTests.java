@@ -13,10 +13,10 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisTemplate;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @ActiveProfiles("test")
 @org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.BEFORE_CLASS)
-@EmbeddedKafka(partitions = 1, brokerProperties = { "listeners=PLAINTEXT://localhost:9092", "port=9092" })
+@EmbeddedKafka(adminTimeout = 60, partitions = 1)
 class ReviewsApplicationTests {
 
     @MockBean
