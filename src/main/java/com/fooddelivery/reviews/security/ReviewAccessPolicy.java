@@ -58,7 +58,8 @@ public class ReviewAccessPolicy {
             return true;
         }
 
-        boolean isSelf = entityId != null && entityId.equals(authentication.getName());
+        boolean isSelf = entityId != null && authentication.getName() != null && 
+                entityId.trim().equalsIgnoreCase(authentication.getName().trim());
         if (!isSelf) {
             log.warn("Refused driver review access: principal={} requested driverId={}",
                     authentication.getName(), entityId);
