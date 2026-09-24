@@ -6,3 +6,5 @@ Microservice responsible for handling generalized entity reviews.
 **CRITICAL:** Only use Oracle for deployment.
 Only deploy as the `Dev` profile unless explicitly requested otherwise.
 
+
+<!-- dummy data -->
