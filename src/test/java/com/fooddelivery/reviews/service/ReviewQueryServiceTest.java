@@ -1,7 +1,6 @@
 package com.fooddelivery.reviews.service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -254,7 +253,7 @@ class ReviewQueryServiceTest {
                 .restaurantName("Bombay Canteen")
                 .deliveryExecutiveId(DRIVER_ID)
                 .deliveryStatus(DeliveryStatus.DELIVERED)
-                .deliveredAt(LocalDateTime.of(2026, 9, 1, 19, 30))
+                .deliveredAt(java.time.Instant.parse("2026-09-01T19:30:00Z"))
                 .items(items)
                 .build();
     }

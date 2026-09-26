@@ -108,7 +108,7 @@ public abstract class BaseMessagingClass {
                         .payload(payloadObject instanceof String
                                 ? (String) payloadObject
                                 : objectMapper.writeValueAsString(payloadObject))
-                        .createdAt(java.time.LocalDateTime.now())
+                        .createdAt(java.time.Instant.now())
                         .build();
 
         com.fooddelivery.common.outbox.repository.OutboxEventRepository repo =

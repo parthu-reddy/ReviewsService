@@ -3,7 +3,6 @@ package com.fooddelivery.reviews.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -46,8 +45,8 @@ public class ReviewEligibilityService {
     private final ReviewProperties reviewProperties;
 
     /**
-     * Zoned to {@code platform.business-zone} — see {@link com.fooddelivery.reviews.config.ClockConfig}.
-     * Injected so the expiry branch is reachable in a test without waiting out the window.
+     * The platform's UTC clock ({@code common.time.TimeConfig}). Injected so the expiry branch is
+     * reachable in a test without waiting out the window.
      */
     private final Clock clock;
 
@@ -90,17 +89,19 @@ public class ReviewEligibilityService {
         return context;
     }
 
-    /** When the review window shuts. Exposed so the eligibility response can show it. */
+    /**
+     * When the review window shuts: a fixed length of time after the delivery instant, so no zone
+     * enters into it. Exposed so the eligibility response can show it.
+     *
+     * <p>This used to resolve {@code deliveredAt} (a zone-less UTC wall clock) in Asia/Kolkata, which
+     * closed every window 5h30 early. RandomDocuments/TimezoneCorrectness_2026-09-25, defect D2.
+     */
     public Instant windowClosesAt(OrderReviewContextDto context) {
-        LocalDateTime deliveredAt = context.getDeliveredAt();
+        Instant deliveredAt = context.getDeliveredAt();
         if (deliveredAt == null) {
             return Instant.EPOCH;
         }
-        // deliveredAt is a LocalDateTime: a wall-clock reading with no offset. Resolve it in the
-        // platform's business zone rather than assuming UTC, which would move the deadline by the
-        // zone's offset -- five and a half hours for the configured Asia/Kolkata.
-        return deliveredAt.atZone(clock.getZone()).toInstant()
-                .plus(Duration.ofDays(reviewProperties.getWindowDays()));
+        return deliveredAt.plus(Duration.ofDays(reviewProperties.getWindowDays()));
     }
 
     /**

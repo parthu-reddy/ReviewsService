@@ -281,7 +281,7 @@ class ReviewCommandServiceTest {
                 .restaurantId(UUID.fromString(OUTLET_ID))
                 .deliveryExecutiveId(UUID.fromString(DRIVER_ID))
                 .deliveryStatus(com.fooddelivery.common.enums.DeliveryStatus.DELIVERED)
-                .deliveredAt(java.time.LocalDateTime.now())
+                .deliveredAt(java.time.Instant.now())
                 .items(List.of())
                 .build();
     }

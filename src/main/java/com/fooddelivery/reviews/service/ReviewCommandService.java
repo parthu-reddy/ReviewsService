@@ -1,7 +1,6 @@
 package com.fooddelivery.reviews.service;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -254,7 +253,7 @@ public class ReviewCommandService {
                     .eventType(EventType.REVIEW_CREATED)
                     .idempotencyKey(idempotencyKey)
                     .payload(objectMapper.writeValueAsString(payload))
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(Instant.now())
                     .status(OutboxStatus.UNPROCESSED)
                     .retryCount(0)
                     .build());

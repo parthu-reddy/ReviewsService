@@ -2,7 +2,6 @@ package com.fooddelivery.reviews.service;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
@@ -53,9 +52,7 @@ class ReviewEligibilityServiceTest {
     private static final UUID DRIVER_ID = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
     private static final UUID ITEM_ID = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
 
-    /** Asia/Kolkata, matching the deployed PLATFORM_BUSINESS_ZONE rather than the UTC default. */
-    private static final ZoneId ZONE = ZoneId.of("Asia/Kolkata");
-    private static final LocalDateTime DELIVERED_AT = LocalDateTime.of(2026, 9, 1, 19, 30);
+    private static final Instant DELIVERED_AT = java.time.Instant.parse("2026-09-01T19:30:00Z");
 
     @Mock
     private CustomerServiceClient customerServiceClient;
@@ -68,10 +65,10 @@ class ReviewEligibilityServiceTest {
         properties.setWindowDays(14);
     }
 
-    /** A clock fixed to `daysAfterDelivery` past the delivery instant, in the business zone. */
+    /** A clock fixed to `daysAfterDelivery` past the delivery instant. */
     private ReviewEligibilityService serviceAt(long daysAfterDelivery) {
-        Instant now = DELIVERED_AT.atZone(ZONE).toInstant().plus(java.time.Duration.ofDays(daysAfterDelivery));
-        return new ReviewEligibilityService(customerServiceClient, properties, Clock.fixed(now, ZONE));
+        Instant now = DELIVERED_AT.plus(java.time.Duration.ofDays(daysAfterDelivery));
+        return new ReviewEligibilityService(customerServiceClient, properties, Clock.fixed(now, java.time.ZoneOffset.UTC));
     }
 
     // ------------------------------------------------------------------ E2: the order exists
@@ -205,23 +202,18 @@ class ReviewEligibilityServiceTest {
     }
 
     /**
-     * deliveredAt is a LocalDateTime with no offset. Resolving it in the business zone rather than
-     * UTC is what keeps the deadline where the customer expects it -- 5h30m apart for Asia/Kolkata.
+     * Defect D2 (TimezoneCorrectness_2026-09-25): the deadline used to move with the clock's zone,
+     * closing 5h30 early under the deployed Asia/Kolkata clock. It is now exactly 14 days after the
+     * delivery instant, whatever zone the clock (or the JVM: the build runs in Pacific/Chatham) is in.
      */
     @Test
-    void theWindowIsMeasuredInTheBusinessZone() {
-        ReviewEligibilityService kolkata =
-                new ReviewEligibilityService(customerServiceClient, properties,
-                        Clock.fixed(Instant.EPOCH, ZoneId.of("Asia/Kolkata")));
-        ReviewEligibilityService utc =
-                new ReviewEligibilityService(customerServiceClient, properties,
-                        Clock.fixed(Instant.EPOCH, ZoneId.of("UTC")));
-
-        OrderReviewContextDto ctx = context(DeliveryStatus.DELIVERED, DELIVERED_AT);
-
-        assertThat(java.time.Duration.between(
-                        kolkata.windowClosesAt(ctx), utc.windowClosesAt(ctx)))
-                .isEqualTo(java.time.Duration.ofMinutes(330));
+    void theWindowClosesFourteenDaysAfterTheDeliveryInstantInEveryZone() {
+        OrderReviewContextDto ctx = context(DeliveryStatus.DELIVERED, java.time.Instant.parse("2026-09-25T00:00:00Z"));
+        for (String zone : java.util.List.of("UTC", "Asia/Kolkata", "America/St_Johns", "Pacific/Chatham")) {
+            ReviewEligibilityService service = new ReviewEligibilityService(customerServiceClient, properties,
+                    Clock.fixed(Instant.EPOCH, ZoneId.of(zone)));
+            assertThat(service.windowClosesAt(ctx)).as(zone).isEqualTo(java.time.Instant.parse("2026-10-09T00:00:00Z"));
+        }
     }
 
     // ------------------------------------------------------------------ E6: target on the order
@@ -314,7 +306,7 @@ class ReviewEligibilityServiceTest {
                 .thenReturn(ResponseEntity.ok(ApiResponse.success(ctx, "ok")));
     }
 
-    private static OrderReviewContextDto context(DeliveryStatus status, LocalDateTime deliveredAt) {
+    private static OrderReviewContextDto context(DeliveryStatus status, Instant deliveredAt) {
         return OrderReviewContextDto.builder()
                 .orderId(ORDER_ID)
                 .customerId(CUSTOMER_ID)
