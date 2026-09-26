@@ -1,0 +1,95 @@
+name: Publish contract stubs
+
+# Manual only, matching the platform-wide decision that no pipeline runs on its own.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-stubs:
+    name: Publish reviews-service stubs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          path: ReviewsService
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      # NOT -Pci-tests. That profile sets spring.cloud.contract.verifier.skip=true, and with the
+      # verifier skipped no stubs jar is produced at all -- the build succeeds and emits nothing to
+      # publish.
+      #
+      # Tests are skipped in THIS step only; the producer contract tests run in the next one, scoped
+      # so that consumer contract tests (which need registry stubs) stay out of this job.
+      - name: Build the stubs jar
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: mvn -B clean package -DskipTests -s ReviewsService/.github/maven-settings.xml -f ReviewsService/pom.xml
+
+      # The stubs jar is a recording. Publishing one nobody verified is how a consumer ends up
+      # testing against a contract its producer does not honour -- which is exactly what happened
+      # with CustomerApplication's getDriverOrderMoney contract, caught only a repo away as an
+      # unhelpful "expected: not <null>".
+      #
+      # ONLY the generated producer tests. Running the whole suite here pulls in CONSUMER contract
+      # tests, which resolve other services' stubs from the registry and need STUBRUNNER_* env this
+      # job deliberately does not have; those belong to contract-tests.yml.
+      #
+      # The gate is separate from running them: if generation silently emits nothing, the test run
+      # is trivially green and the jar still ships unverified.
+      - name: Verify the stubs against this service's own contracts
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          GEN_DIR="ReviewsService/target/generated-test-sources/contracts"
+          REPORTS="ReviewsService/target/surefire-reports"
+          CLASSES=$(find "$GEN_DIR" -name '*Test.java' -exec basename {} .java \; 2>/dev/null | sort -u | paste -sd, -)
+          if [ -z "$CLASSES" ]; then
+            echo "::error::No producer contract tests were generated. The stubs jar would be published unverified."
+            exit 1
+          fi
+          echo "running producer contract tests: $CLASSES"
+          mvn -B test -Dtest="$CLASSES" -DfailIfNoTests=false \
+            -s ReviewsService/.github/maven-settings.xml -f ReviewsService/pom.xml
+          MISSING=0
+          for f in $(find "$GEN_DIR" -name '*Test.java' 2>/dev/null); do
+            b=$(basename "$f" .java)
+            if ! ls "$REPORTS"/TEST-*."$b".xml >/dev/null 2>&1; then
+              echo "::error::Generated contract test $b was compiled but never ran."
+              MISSING=1
+            fi
+          done
+          [ "$MISSING" -eq 0 ] || exit 1
+          echo "OK: producer contract tests generated and executed"
+
+
+      # deploy:deploy-file, not deploy. A bare `mvn deploy` would also publish the main artifact --
+      # a Spring Boot fat jar, 118 MB for WalletService -- into a registry whose whole purpose is to
+      # hold 4 KB stub jars.
+      #
+      # Everything goes to ONE registry because StubRunnerProperties.repositoryRoot is a single
+      # Resource, not a list, so a consumer can point at exactly one. Cross-repository writes need
+      # the classic PACKAGES_TOKEN; the per-run GITHUB_TOKEN is scoped to its own repository.
+      - name: Publish the stubs jar
+        env:
+          PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        run: |
+          STUBS=$(ls ReviewsService/target/*-stubs.jar)
+          echo "publishing $STUBS ($(du -h "$STUBS" | cut -f1))"
+          mvn -B deploy:deploy-file \
+            -DrepositoryId=github-contracts \
+            -Durl=https://maven.pkg.github.com/parthu-reddy/FoodDeliveryContracts \
+            -Dfile="$STUBS" \
+            -DgroupId=com.fooddelivery \
+            -DartifactId=reviews-service \
+            -Dversion=1.0-SNAPSHOT \
+            -Dclassifier=stubs \
+            -Dpackaging=jar \
+            -s ReviewsService/.github/maven-settings.xml
