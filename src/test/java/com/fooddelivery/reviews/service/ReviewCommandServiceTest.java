@@ -26,7 +26,7 @@ import com.fooddelivery.reviews.dto.ReviewDetailDto;
 import com.fooddelivery.reviews.dto.ReviewEntryRequest;
 import com.fooddelivery.reviews.entity.Review;
 import com.fooddelivery.reviews.entity.ReviewAggregate;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import com.fooddelivery.reviews.enums.ReviewRejectionReason;
 import com.fooddelivery.reviews.event.AggregateUpdatedLocalEvent;
 import com.fooddelivery.reviews.exception.ReviewNotAllowedException;
@@ -83,8 +83,8 @@ class ReviewCommandServiceTest {
     @Test
     void everyEntryIsWrittenWithTheOrderAndTheSnapshottedAuthor() {
         List<ReviewDetailDto> written = service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, "Great"),
-                        entry(EntityType.DRIVER, DRIVER_ID, 4, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, "Great"),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
                 USER_ID);
 
         assertThat(written).hasSize(2);
@@ -110,8 +110,8 @@ class ReviewCommandServiceTest {
     @Test
     void theWholeSubmissionIsWrittenInOneFlush() {
         service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.DRIVER, DRIVER_ID, 4, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
                 USER_ID);
 
         verify(reviewRepository).saveAllAndFlush(any());
@@ -121,22 +121,22 @@ class ReviewCommandServiceTest {
     @Test
     void eachDistinctTargetGetsItsOwnAggregate() {
         service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.DRIVER, DRIVER_ID, 3, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 3, null)),
                 USER_ID);
 
         ArgumentCaptor<ReviewAggregate> agg = ArgumentCaptor.forClass(ReviewAggregate.class);
         verify(aggregateRepository, org.mockito.Mockito.times(2)).saveAndFlush(agg.capture());
         assertThat(agg.getAllValues()).extracting(a -> a.getId().getEntityType())
-                .containsExactlyInAnyOrder(EntityType.RESTAURANT, EntityType.DRIVER);
+                .containsExactlyInAnyOrder(ReviewEntityType.RESTAURANT, ReviewEntityType.DRIVER);
         assertThat(agg.getAllValues()).allSatisfy(a -> assertThat(a.getTotalReviews()).isEqualTo(1));
     }
 
     @Test
     void oneCacheEvictionEventIsPublishedPerEntity() {
         service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.DRIVER, DRIVER_ID, 3, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 3, null)),
                 USER_ID);
 
         verify(eventPublisher, org.mockito.Mockito.times(2))
@@ -147,7 +147,7 @@ class ReviewCommandServiceTest {
 
     @Test
     void theOutboxKeyIsScopedToTheOrderSoASecondOrderDoesNotCollide() {
-        service.createReviews(request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID);
+        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID);
 
         ArgumentCaptor<OutboxEventEntity> event = ArgumentCaptor.forClass(OutboxEventEntity.class);
         verify(outboxEventRepository).save(event.capture());
@@ -161,7 +161,7 @@ class ReviewCommandServiceTest {
 
     @Test
     void theOutboxPayloadCarriesEverythingTheConsumerReads() throws Exception {
-        service.createReviews(request(entry(EntityType.RESTAURANT, OUTLET_ID, 4, null)), USER_ID);
+        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 4, null)), USER_ID);
 
         ArgumentCaptor<OutboxEventEntity> event = ArgumentCaptor.forClass(OutboxEventEntity.class);
         verify(outboxEventRepository).save(event.capture());
@@ -184,8 +184,8 @@ class ReviewCommandServiceTest {
     @Test
     void anOutboxRowIsWrittenPerReviewNotPerSubmission() {
         service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.DRIVER, DRIVER_ID, 4, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
                 USER_ID);
 
         verify(outboxEventRepository, org.mockito.Mockito.times(2)).save(any());
@@ -196,8 +196,8 @@ class ReviewCommandServiceTest {
     @Test
     void ratingTheSameTargetTwiceInOneSubmissionIsRefusedBeforeAnyWrite() {
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.RESTAURANT, OUTLET_ID, 1, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 1, null)),
                 USER_ID))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
@@ -210,12 +210,12 @@ class ReviewCommandServiceTest {
     @Test
     void aTargetAlreadyReviewedOnThisOrderIsRefusedWithItsOwnReason() {
         when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(
-                Review.builder().entityType(EntityType.RESTAURANT).entityId(OUTLET_ID)
+                Review.builder().entityType(ReviewEntityType.RESTAURANT).entityId(OUTLET_ID)
                         .id(UUID.randomUUID()).orderId(ORDER_ID).userId(USER_ID)
                         .rating(3).createdAt(java.time.Instant.now()).build()));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.ALREADY_REVIEWED);
@@ -235,7 +235,7 @@ class ReviewCommandServiceTest {
                 .thenThrow(new DataIntegrityViolationException("uq_reviews_entity_order"));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.ALREADY_REVIEWED);
@@ -248,7 +248,7 @@ class ReviewCommandServiceTest {
                 new ReviewNotAllowedException(ReviewRejectionReason.REVIEW_WINDOW_CLOSED, "closed"));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
                 .isInstanceOf(ReviewNotAllowedException.class);
 
         verify(transactionTemplate, never()).execute(any());
@@ -263,8 +263,8 @@ class ReviewCommandServiceTest {
                 .when(eligibilityService).assertTargetOnOrder(any(), any(), any());
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(EntityType.RESTAURANT, OUTLET_ID, 5, null),
-                        entry(EntityType.DRIVER, DRIVER_ID, 4, null)),
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
+                        entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
                 USER_ID))
                 .isInstanceOf(ReviewNotAllowedException.class);
 
@@ -290,7 +290,7 @@ class ReviewCommandServiceTest {
         return CreateReviewRequest.builder().orderId(ORDER_ID).entries(List.of(entries)).build();
     }
 
-    private static ReviewEntryRequest entry(EntityType type, String id, int rating, String comment) {
+    private static ReviewEntryRequest entry(ReviewEntityType type, String id, int rating, String comment) {
         return ReviewEntryRequest.builder()
                 .entityType(type).entityId(id).rating(rating).comment(comment).build();
     }

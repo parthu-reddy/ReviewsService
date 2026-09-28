@@ -2,7 +2,7 @@ package com.fooddelivery.reviews.web;
 
 import com.fooddelivery.common.dto.ApiResponse;
 import com.fooddelivery.reviews.dto.ReviewDetailDto;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import com.fooddelivery.reviews.service.ReviewQueryService;
 
 import jakarta.validation.constraints.Max;
@@ -49,7 +49,7 @@ public class AdminReviewController {
     /** Every review of one entity, with its author and order intact. */
     @GetMapping
     public ResponseEntity<ApiResponse<PagedModel<ReviewDetailDto>>> getReviewsForEntity(
-            @RequestParam EntityType entityType,
+            @RequestParam ReviewEntityType entityType,
             @RequestParam String entityId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {

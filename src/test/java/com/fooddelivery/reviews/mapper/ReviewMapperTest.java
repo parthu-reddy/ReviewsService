@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import com.fooddelivery.reviews.dto.ReviewDetailDto;
 import com.fooddelivery.reviews.dto.ReviewDto;
 import com.fooddelivery.reviews.entity.Review;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,7 +24,7 @@ class ReviewMapperTest {
     private static final UUID ORDER_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final Instant CREATED = Instant.parse("2026-09-11T10:15:30Z");
 
-    private static Review review(EntityType type) {
+    private static Review review(ReviewEntityType type) {
         return Review.builder()
                 .entityType(type)
                 .entityId("entity-1")
@@ -40,7 +40,7 @@ class ReviewMapperTest {
 
     @Test
     void aRestaurantReviewKeepsTheAuthorLabel() {
-        ReviewDto dto = ReviewMapper.toPublic(review(EntityType.RESTAURANT));
+        ReviewDto dto = ReviewMapper.toPublic(review(ReviewEntityType.RESTAURANT));
 
         assertThat(dto.getAuthorDisplayName()).isEqualTo("Priya R.");
         assertThat(dto.getRating()).isEqualTo(4);
@@ -51,7 +51,7 @@ class ReviewMapperTest {
 
     @Test
     void aProductReviewKeepsTheAuthorLabel() {
-        assertThat(ReviewMapper.toPublic(review(EntityType.PRODUCT)).getAuthorDisplayName())
+        assertThat(ReviewMapper.toPublic(review(ReviewEntityType.PRODUCT)).getAuthorDisplayName())
                 .isEqualTo("Priya R.");
     }
 
@@ -61,7 +61,7 @@ class ReviewMapperTest {
      */
     @Test
     void aDriverReviewWithholdsTheAuthorEvenThoughOneIsStored() {
-        Review stored = review(EntityType.DRIVER);
+        Review stored = review(ReviewEntityType.DRIVER);
         assertThat(stored.getAuthorDisplayName()).isEqualTo("Priya R.");
 
         assertThat(ReviewMapper.toPublic(stored).getAuthorDisplayName()).isNull();
@@ -70,7 +70,7 @@ class ReviewMapperTest {
     @Test
     void thePublicProjectionCarriesNoCommentWhenNoneWasLeft() {
         Review noComment = Review.builder()
-                .entityType(EntityType.RESTAURANT).entityId("e").id(REVIEW_ID).orderId(ORDER_ID)
+                .entityType(ReviewEntityType.RESTAURANT).entityId("e").id(REVIEW_ID).orderId(ORDER_ID)
                 .userId("u").authorDisplayName("Priya R.").rating(5).comment(null)
                 .createdAt(CREATED).build();
 
@@ -79,7 +79,7 @@ class ReviewMapperTest {
 
     @Test
     void theDetailProjectionCarriesProvenanceForEveryEntityType() {
-        for (EntityType type : EntityType.values()) {
+        for (ReviewEntityType type : ReviewEntityType.values()) {
             ReviewDetailDto detail = ReviewMapper.toDetail(review(type));
 
             assertThat(detail.getUserId()).describedAs("%s userId", type).isEqualTo("customer-9");

@@ -3,7 +3,7 @@ package com.fooddelivery.reviews.mapper;
 import com.fooddelivery.reviews.dto.ReviewDetailDto;
 import com.fooddelivery.reviews.dto.ReviewDto;
 import com.fooddelivery.reviews.entity.Review;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 /**
  * Turns a stored review into one of the two projections the API exposes.
@@ -31,9 +31,11 @@ public final class ReviewMapper {
                 .entityId(review.getEntityId())
                 .rating(review.getRating())
                 .comment(review.getComment())
-                .authorDisplayName(review.getEntityType() == EntityType.DRIVER
+                .authorDisplayName(review.getEntityType() == ReviewEntityType.DRIVER
                         ? null
-                        : review.getAuthorDisplayName())
+                        : review.getVisibility() == com.fooddelivery.reviews.enums.ReviewVisibility.PUBLIC
+                                ? review.getAuthorDisplayName() : null)
+                .authorRole(review.getAuthorRole())
                 .createdAt(review.getCreatedAt())
                 .build();
     }
@@ -47,6 +49,21 @@ public final class ReviewMapper {
                 .orderId(review.getOrderId())
                 .userId(review.getUserId())
                 .authorDisplayName(review.getAuthorDisplayName())
+                .authorRole(review.getAuthorRole())
+                .visibility(review.getVisibility())
+                .rating(review.getRating())
+                .comment(review.getComment())
+                .createdAt(review.getCreatedAt())
+                .build();
+    }
+
+    /** Recipient view of private feedback; reviewer identity and order id do not cross this boundary. */
+    public static com.fooddelivery.reviews.dto.ReviewReceivedDto toReceived(Review review) {
+        return com.fooddelivery.reviews.dto.ReviewReceivedDto.builder()
+                .id(review.getReviewId())
+                .entityType(review.getEntityType())
+                .entityId(review.getEntityId())
+                .authorRole(review.getAuthorRole())
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .createdAt(review.getCreatedAt())

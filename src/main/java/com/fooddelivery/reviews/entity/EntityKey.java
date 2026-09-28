@@ -1,6 +1,6 @@
 package com.fooddelivery.reviews.entity;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
@@ -30,7 +30,7 @@ public class EntityKey implements Serializable {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "entity_type", nullable = false, length = 50)
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @Column(name = "entity_id", nullable = false, length = 255)
     private String entityId;

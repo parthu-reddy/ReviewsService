@@ -1,6 +1,8 @@
 package com.fooddelivery.reviews.entity;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.common.enums.RoleName;
+import com.fooddelivery.reviews.enums.ReviewVisibility;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,14 +24,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One customer's immutable statement about one participant in one delivered order.
+ * One immutable participant's statement about an entity on one delivered order.
  *
  * <p><strong>Immutable by construction.</strong> Every mapped column is {@code updatable = false},
  * so even a detached-then-merged instance cannot rewrite a row, and there is no PUT, PATCH or
  * DELETE anywhere on the review surface. A second submission for the same
- * {@code (entityType, entityId, orderId)} collides with {@code uq_reviews_entity_order} and is
- * reported as {@code ALREADY_REVIEWED} together with what was originally said — an edit is not
- * rejected as an error, it is answered with the existing review.
+ * {@code (entityType, entityId, orderId, userId)} collides with
+ * {@code uq_reviews_entity_order_author}; another participant can independently review the same
+ * target on the same order.
  */
 @Entity
 @Table(name = "reviews")
@@ -43,7 +45,7 @@ public class Review implements Persistable<ReviewId> {
     @Id
     @Enumerated(EnumType.STRING)
     @Column(name = "entity_type", nullable = false, updatable = false, length = 50)
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @Id
     @Column(name = "entity_id", nullable = false, updatable = false, length = 255)
@@ -68,6 +70,14 @@ public class Review implements Persistable<ReviewId> {
 
     @Column(name = "user_id", nullable = false, updatable = false, length = 255)
     private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "author_role", nullable = false, updatable = false, length = 32)
+    private RoleName authorRole;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility", nullable = false, updatable = false, length = 16)
+    private ReviewVisibility visibility;
 
     /**
      * How the author is shown publicly — "Priya R.". Snapshotted from the order at write time

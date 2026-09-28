@@ -14,10 +14,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Every review a customer is making about one order, submitted together.
+ * Every review one participant is making about one order, submitted together.
  *
  * <p>Batched deliberately. A review cannot be edited once written, so a half-accepted submission
- * would be permanently wrong — the customer could never repair the entries that failed. One request
+ * would be permanently wrong — the author could never repair the entries that failed. One request
  * means one eligibility resolution and one transaction: all entries commit, or none do.
  */
 @Data

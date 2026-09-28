@@ -8,7 +8,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,7 +36,7 @@ class ReviewAccessPolicyTest {
 
     @Test
     void anySignedInUserMayReadRestaurantAndProductReviews() {
-        for (EntityType type : List.of(EntityType.RESTAURANT, EntityType.PRODUCT)) {
+        for (ReviewEntityType type : List.of(ReviewEntityType.RESTAURANT, ReviewEntityType.PRODUCT)) {
             for (String role : List.of("CUSTOMER", "RESTAURANT", "DELIVERY", "ADMIN", "SERVICE")) {
                 Authentication auth = user("whoever", role);
                 assertThat(policy.canReadAggregate(auth, type, "any-entity"))
@@ -53,8 +53,8 @@ class ReviewAccessPolicyTest {
     void aDriverMayReadTheirOwnRating() {
         Authentication auth = user(DRIVER_ID, "DELIVERY");
 
-        assertThat(policy.canReadAggregate(auth, EntityType.DRIVER, DRIVER_ID)).isTrue();
-        assertThat(policy.canListReviews(auth, EntityType.DRIVER, DRIVER_ID)).isTrue();
+        assertThat(policy.canReadAggregate(auth, ReviewEntityType.DRIVER, DRIVER_ID)).isTrue();
+        assertThat(policy.canListReviews(auth, ReviewEntityType.DRIVER, DRIVER_ID)).isTrue();
     }
 
     /** The case the whole rule exists for. */
@@ -62,34 +62,34 @@ class ReviewAccessPolicyTest {
     void aDriverMayNotReadAnotherDriversRating() {
         Authentication auth = user(DRIVER_ID, "DELIVERY");
 
-        assertThat(policy.canReadAggregate(auth, EntityType.DRIVER, OTHER_DRIVER_ID)).isFalse();
-        assertThat(policy.canListReviews(auth, EntityType.DRIVER, OTHER_DRIVER_ID)).isFalse();
+        assertThat(policy.canReadAggregate(auth, ReviewEntityType.DRIVER, OTHER_DRIVER_ID)).isFalse();
+        assertThat(policy.canListReviews(auth, ReviewEntityType.DRIVER, OTHER_DRIVER_ID)).isFalse();
     }
 
     @Test
     void aCustomerMayNotReadAnyDriversRating() {
         Authentication auth = user("some-customer", "CUSTOMER");
 
-        assertThat(policy.canReadAggregate(auth, EntityType.DRIVER, DRIVER_ID)).isFalse();
-        assertThat(policy.canListReviews(auth, EntityType.DRIVER, DRIVER_ID)).isFalse();
+        assertThat(policy.canReadAggregate(auth, ReviewEntityType.DRIVER, DRIVER_ID)).isFalse();
+        assertThat(policy.canListReviews(auth, ReviewEntityType.DRIVER, DRIVER_ID)).isFalse();
     }
 
     /** A restaurant owner has no more claim on a driver's performance data than a customer does. */
     @Test
     void aRestaurantOwnerMayNotReadADriversRating() {
-        assertThat(policy.canReadAggregate(user("owner", "RESTAURANT"), EntityType.DRIVER, DRIVER_ID))
+        assertThat(policy.canReadAggregate(user("owner", "RESTAURANT"), ReviewEntityType.DRIVER, DRIVER_ID))
                 .isFalse();
     }
 
     @Test
     void anAdminMayReadAnyDriversRating() {
-        assertThat(policy.canReadAggregate(user("root", "ADMIN"), EntityType.DRIVER, DRIVER_ID)).isTrue();
-        assertThat(policy.canListReviews(user("root", "ADMIN"), EntityType.DRIVER, DRIVER_ID)).isTrue();
+        assertThat(policy.canReadAggregate(user("root", "ADMIN"), ReviewEntityType.DRIVER, DRIVER_ID)).isTrue();
+        assertThat(policy.canListReviews(user("root", "ADMIN"), ReviewEntityType.DRIVER, DRIVER_ID)).isTrue();
     }
 
     @Test
     void anInternalServiceMayReadAnyDriversRating() {
-        assertThat(policy.canReadAggregate(user("reviews-service", "SERVICE"), EntityType.DRIVER, DRIVER_ID))
+        assertThat(policy.canReadAggregate(user("reviews-service", "SERVICE"), ReviewEntityType.DRIVER, DRIVER_ID))
                 .isTrue();
     }
 
@@ -97,8 +97,8 @@ class ReviewAccessPolicyTest {
 
     @Test
     void noPrincipalMeansNoAccess() {
-        assertThat(policy.canReadAggregate(null, EntityType.RESTAURANT, "x")).isFalse();
-        assertThat(policy.canListReviews(null, EntityType.DRIVER, DRIVER_ID)).isFalse();
+        assertThat(policy.canReadAggregate(null, ReviewEntityType.RESTAURANT, "x")).isFalse();
+        assertThat(policy.canListReviews(null, ReviewEntityType.DRIVER, DRIVER_ID)).isFalse();
     }
 
     /**
@@ -111,7 +111,7 @@ class ReviewAccessPolicyTest {
         Authentication anon = new AnonymousAuthenticationToken("key", "anonymousUser",
                 List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")));
 
-        assertThat(policy.canReadAggregate(anon, EntityType.DRIVER, DRIVER_ID)).isFalse();
+        assertThat(policy.canReadAggregate(anon, ReviewEntityType.DRIVER, DRIVER_ID)).isFalse();
     }
 
     @Test
@@ -122,6 +122,6 @@ class ReviewAccessPolicyTest {
     /** A null entity id must not accidentally match a null principal name. */
     @Test
     void aNullDriverIdIsRefused() {
-        assertThat(policy.canReadAggregate(user(DRIVER_ID, "DELIVERY"), EntityType.DRIVER, null)).isFalse();
+        assertThat(policy.canReadAggregate(user(DRIVER_ID, "DELIVERY"), ReviewEntityType.DRIVER, null)).isFalse();
     }
 }

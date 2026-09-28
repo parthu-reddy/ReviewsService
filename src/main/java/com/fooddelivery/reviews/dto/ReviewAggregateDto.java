@@ -1,6 +1,6 @@
 package com.fooddelivery.reviews.dto;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class ReviewAggregateDto implements Serializable {
     @jakarta.validation.constraints.NotNull
-    private EntityType entityType;
+    private ReviewEntityType entityType;
     @jakarta.validation.constraints.NotNull
     private String entityId;
     @io.swagger.v3.oas.annotations.media.Schema(requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)

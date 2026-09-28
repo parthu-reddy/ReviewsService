@@ -3,6 +3,11 @@ package com.fooddelivery.reviews.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -10,30 +15,22 @@ import org.springframework.stereotype.Service;
 
 import com.fooddelivery.common.client.CustomerServiceClient;
 import com.fooddelivery.common.dto.ApiResponse;
+import com.fooddelivery.common.dto.order.OrderReviewAuthorizationRequest;
+import com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult;
 import com.fooddelivery.common.dto.order.OrderReviewContextDto;
+import com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest;
 import com.fooddelivery.common.enums.DeliveryStatus;
+import com.fooddelivery.common.enums.RoleName;
 import com.fooddelivery.reviews.config.ReviewProperties;
-import com.fooddelivery.reviews.enums.EntityType;
 import com.fooddelivery.reviews.enums.ReviewRejectionReason;
+import com.fooddelivery.reviews.exception.ExternalServiceUnavailableException;
 import com.fooddelivery.reviews.exception.ReviewNotAllowedException;
 
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Decides whether a customer may review an order, and what on it.
- *
- * <p>Every gate here is server-side and none of them is re-derived elsewhere. The UI mirrors them
- * only so it does not offer an action that will fail; it is not trusted to enforce them.
- *
- * <p>The previous design asked "does this restaurant exist", "does this product exist", "is this
- * user a driver" of three separate services. That was the wrong question — existence is not
- * eligibility, and a customer who never ordered could review anything — and it could not succeed
- * anyway, because those endpoints require SERVICE, RESTAURANT or ADMIN while the identity
- * propagated on a review request is the customer's. One call to the order's owner answers the
- * question that actually matters.
- */
+/** Coordinates review-specific rules with the order service's authoritative relationship check. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -43,99 +40,130 @@ public class ReviewEligibilityService {
 
     private final CustomerServiceClient customerServiceClient;
     private final ReviewProperties reviewProperties;
-
-    /**
-     * The platform's UTC clock ({@code common.time.TimeConfig}). Injected so the expiry branch is
-     * reachable in a test without waiting out the window.
-     */
     private final Clock clock;
 
+    /** Fetches the order snapshot over the signed service-to-service OpenFeign client. */
+    public OrderReviewContextDto getOrderContext(UUID orderId) {
+        ResponseEntity<ApiResponse<OrderReviewContextDto>> response;
+        try {
+            response = customerServiceClient.getOrderReviewContext(orderId.toString(), CALLING_SERVICE);
+        } catch (FeignException.NotFound e) {
+            throw new ReviewNotAllowedException(ReviewRejectionReason.ORDER_NOT_FOUND,
+                    "Order " + orderId + " was not found.");
+        } catch (FeignException e) {
+            throw new ExternalServiceUnavailableException(
+                    "The order service could not provide review context for order " + orderId, e);
+        }
+
+        ApiResponse<OrderReviewContextDto> body = response.getBody();
+        if (body == null || body.getData() == null) {
+            throw new ExternalServiceUnavailableException(
+                    "No review context returned for order " + orderId);
+        }
+        return body.getData();
+    }
+
     /**
-     * Fetches the order's review context and applies gates E2–E5: the order exists, the caller
-     * placed it, it was delivered, and the window is still open.
-     *
-     * @throws ReviewNotAllowedException when any gate fails
+     * Asks CustomerApplication to verify the actor and each exact target in a single batch. The
+     * request is internal and authenticated as SERVICE by {@code FeignSecurityInterceptor}; the
+     * actor identity comes from ReviewsService's already-verified principal.
      */
-    public OrderReviewContextDto resolve(UUID orderId, String callerUserId) {
-        OrderReviewContextDto context = fetchContext(orderId);
-
-        if (context.getCustomerId() == null
-                || !context.getCustomerId().toString().equals(callerUserId)) {
-            // Deliberately does not say whose order it is.
-            throw new ReviewNotAllowedException(ReviewRejectionReason.NOT_YOUR_ORDER,
-                    "Order " + orderId + " does not belong to you.");
+    public List<OrderReviewAuthorizationResult> authorizeTargets(
+            UUID orderId,
+            UUID reviewerId,
+            RoleName reviewerRole,
+            List<OrderReviewTargetAuthorizationRequest> targets) {
+        ResponseEntity<ApiResponse<List<OrderReviewAuthorizationResult>>> response;
+        try {
+            response = customerServiceClient.authorizeOrderReviewTargets(
+                    orderId.toString(),
+                    OrderReviewAuthorizationRequest.builder()
+                            .reviewerId(reviewerId)
+                            .reviewerRole(reviewerRole)
+                            .targets(targets)
+                            .build(),
+                    CALLING_SERVICE);
+        } catch (FeignException.NotFound e) {
+            throw new ReviewNotAllowedException(ReviewRejectionReason.ORDER_NOT_FOUND,
+                    "Order " + orderId + " was not found.");
+        } catch (FeignException e) {
+            throw new ExternalServiceUnavailableException(
+                    "The order service could not authorize review targets for order " + orderId, e);
         }
 
-        if (context.getDeliveryStatus() != DeliveryStatus.DELIVERED) {
-            throw new ReviewNotAllowedException(ReviewRejectionReason.ORDER_NOT_DELIVERED,
-                    "Order " + orderId + " has not been delivered, so there is nothing to review yet.");
+        ApiResponse<List<OrderReviewAuthorizationResult>> body = response.getBody();
+        if (body == null || !body.isSuccess() || body.getData() == null
+                || body.getData().size() != targets.size()) {
+            throw new ExternalServiceUnavailableException(
+                    "The order service returned an incomplete review authorization response for order "
+                            + orderId);
         }
 
-        if (context.getDeliveredAt() == null) {
-            // DELIVERED without a delivery timestamp means the window cannot be evaluated. Refusing
-            // is the safe answer: the alternative is an order that stays reviewable forever.
-            log.warn("Order {} is DELIVERED but carries no deliveredAt; refusing to open a review window",
-                    orderId);
+        Set<String> requestedKeys = new HashSet<>();
+        for (OrderReviewTargetAuthorizationRequest target : targets) {
+            if (target == null || target.getTargetType() == null || target.getTargetId() == null
+                    || !requestedKeys.add(targetKey(target.getTargetType().name(), target.getTargetId()))) {
+                throw new ExternalServiceUnavailableException(
+                        "The review service generated an invalid authorization request for order " + orderId);
+            }
+        }
+
+        Map<String, OrderReviewAuthorizationResult> decisions = new HashMap<>();
+        for (OrderReviewAuthorizationResult decision : body.getData()) {
+            if (decision == null || decision.getTargetType() == null || decision.getTargetId() == null) {
+                throw new ExternalServiceUnavailableException(
+                        "The order service returned an invalid review authorization response for order "
+                                + orderId);
+            }
+            String key = targetKey(decision.getTargetType().name(), decision.getTargetId());
+            if (!requestedKeys.contains(key) || decisions.putIfAbsent(key, decision) != null
+                    || (!decision.isAllowed() && (decision.getReasonCode() == null
+                    || decision.getReasonCode().isBlank()))) {
+                throw new ExternalServiceUnavailableException(
+                        "The order service returned mismatched review authorization results for order "
+                                + orderId);
+            }
+        }
+        if (!decisions.keySet().equals(requestedKeys)) {
+            throw new ExternalServiceUnavailableException(
+                    "The order service returned mismatched review authorization results for order " + orderId);
+        }
+        return targets.stream()
+                .map(target -> decisions.get(targetKey(target.getTargetType().name(), target.getTargetId())))
+                .toList();
+    }
+
+    private static String targetKey(String targetType, String targetId) {
+        return targetType + ":" + targetId;
+    }
+
+    /**
+     * Applies the review service's delivery-window policy after the order service has confirmed
+     * that the actor is a participant. This ordering prevents order state from being disclosed to
+     * unrelated accounts.
+     */
+    public void assertReviewWindowOpen(OrderReviewContextDto context) {
+        if (context.getDeliveryStatus() != DeliveryStatus.DELIVERED || context.getDeliveredAt() == null) {
             throw new ReviewNotAllowedException(ReviewRejectionReason.ORDER_NOT_DELIVERED,
-                    "Order " + orderId + " has no recorded delivery time.");
+                    "This order has not been delivered, so there is nothing to review yet.");
         }
 
         if (clock.instant().isAfter(windowClosesAt(context))) {
             throw new ReviewNotAllowedException(ReviewRejectionReason.REVIEW_WINDOW_CLOSED,
                     "The " + reviewProperties.getWindowDays()
-                            + "-day review window for order " + orderId + " has closed.");
+                            + "-day review window for order " + context.getOrderId() + " has closed.");
         }
-
-        return context;
     }
 
-    /**
-     * When the review window shuts: a fixed length of time after the delivery instant, so no zone
-     * enters into it. Exposed so the eligibility response can show it.
-     *
-     * <p>This used to resolve {@code deliveredAt} (a zone-less UTC wall clock) in Asia/Kolkata, which
-     * closed every window 5h30 early. RandomDocuments/TimezoneCorrectness_2026-09-25, defect D2.
-     */
+    /** Fixed-length window after the delivery instant; no local time zone participates. */
     public Instant windowClosesAt(OrderReviewContextDto context) {
         Instant deliveredAt = context.getDeliveredAt();
-        if (deliveredAt == null) {
-            return Instant.EPOCH;
-        }
-        return deliveredAt.plus(Duration.ofDays(reviewProperties.getWindowDays()));
+        return deliveredAt == null
+                ? Instant.EPOCH
+                : deliveredAt.plus(Duration.ofDays(reviewProperties.getWindowDays()));
     }
 
-    /**
-     * Gate E6 — the target was actually part of this order.
-     *
-     * <p>{@code restaurantId} is an OUTLET id and {@code menuItemId} is a MASTER menu item id; both
-     * comparisons are against what the order itself recorded, so a renamed or delisted item is
-     * still reviewable by the person who ate it.
-     */
-    public void assertTargetOnOrder(OrderReviewContextDto context, EntityType entityType, String entityId) {
-        boolean onOrder = switch (entityType) {
-            case RESTAURANT -> context.getRestaurantId() != null
-                    && context.getRestaurantId().toString().equals(entityId);
-            case DRIVER -> context.getDeliveryExecutiveId() != null
-                    && context.getDeliveryExecutiveId().toString().equals(entityId);
-            case PRODUCT -> context.getItems() != null
-                    && context.getItems().stream()
-                            .anyMatch(item -> item.getMenuItemId() != null
-                                    && item.getMenuItemId().toString().equals(entityId));
-        };
-
-        if (!onOrder) {
-            throw new ReviewNotAllowedException(ReviewRejectionReason.TARGET_NOT_ON_ORDER,
-                    entityType + " " + entityId + " was not part of order " + context.getOrderId() + ".");
-        }
-    }
-
-    /**
-     * How the author is shown publicly: "Priya Raman" becomes "Priya R.".
-     *
-     * <p>A surname initial rather than a full name — a review is a public statement attached to a
-     * person who ate at a specific place, and the full legal name is more than the reader needs.
-     * Returns null when the order carries no name, and the reader is then shown "A customer".
-     */
+    /** "Priya Raman" becomes "Priya R."; absent names are kept absent. */
     public static String toDisplayName(String customerName) {
         if (customerName == null || customerName.isBlank()) {
             return null;
@@ -146,29 +174,5 @@ public class ReviewEligibilityService {
         }
         String surname = parts[parts.length - 1];
         return parts[0] + " " + Character.toUpperCase(surname.charAt(0)) + ".";
-    }
-
-    private OrderReviewContextDto fetchContext(UUID orderId) {
-        ResponseEntity<ApiResponse<OrderReviewContextDto>> response;
-        try {
-            response = customerServiceClient.getOrderReviewContext(orderId.toString(), CALLING_SERVICE);
-        } catch (FeignException.NotFound e) {
-            throw new ReviewNotAllowedException(ReviewRejectionReason.ORDER_NOT_FOUND,
-                    "Order " + orderId + " was not found.");
-        } catch (FeignException.Forbidden e) {
-            // The order service refused us. From the customer's side that is indistinguishable from
-            // "not yours", and saying so leaks nothing.
-            throw new ReviewNotAllowedException(ReviewRejectionReason.NOT_YOUR_ORDER,
-                    "Order " + orderId + " does not belong to you.");
-        }
-
-        ApiResponse<OrderReviewContextDto> body = response.getBody();
-        if (body == null || body.getData() == null) {
-            // Fail closed. A null body here is the order service being unhealthy, not the order
-            // being ineligible, and accepting the review would record an unprovable claim.
-            throw new com.fooddelivery.reviews.exception.ExternalServiceUnavailableException(
-                    "No review context returned for order " + orderId);
-        }
-        return body.getData();
     }
 }

@@ -2,16 +2,22 @@ package com.fooddelivery.reviews.service;
 
 import com.fooddelivery.common.dto.order.OrderReviewContextDto;
 import com.fooddelivery.common.dto.order.OrderReviewItemDto;
+import com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult;
+import com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest;
+import com.fooddelivery.common.enums.RoleName;
 import com.fooddelivery.reviews.dto.AggregateBatchDto;
 import com.fooddelivery.reviews.dto.ReviewAggregateDto;
 import com.fooddelivery.reviews.dto.ReviewDetailDto;
 import com.fooddelivery.reviews.dto.ReviewDto;
 import com.fooddelivery.reviews.dto.ReviewEligibilityDto;
+import com.fooddelivery.reviews.dto.ReviewReceivedDto;
 import com.fooddelivery.reviews.dto.ReviewTargetDto;
 import com.fooddelivery.reviews.entity.EntityKey;
 import com.fooddelivery.reviews.entity.Review;
 import com.fooddelivery.reviews.entity.ReviewAggregate;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.reviews.enums.ReviewRejectionReason;
+import com.fooddelivery.reviews.enums.ReviewVisibility;
 import com.fooddelivery.reviews.exception.ReviewNotAllowedException;
 import com.fooddelivery.reviews.mapper.ReviewMapper;
 import com.fooddelivery.reviews.repository.AggregateRepository;
@@ -42,7 +48,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReviewQueryService {
 
-    /** Labels the driver target. The customer-side order records no rider name to use instead. */
+    /** Labels the driver target. The order snapshot does not carry a rider name. */
     public static final String DRIVER_DISPLAY_NAME = "Delivery partner";
 
     /** A batch request beyond this is rejected rather than turned into an unbounded IN clause. */
@@ -58,11 +64,11 @@ public class ReviewQueryService {
     private static final Duration EMPTY_TTL = Duration.ofMinutes(5);
     private static final Duration LOCK_TTL = Duration.ofSeconds(5);
 
-    public static String getCacheKey(EntityType entityType, String entityId) {
+    public static String getCacheKey(ReviewEntityType entityType, String entityId) {
         return String.format("review_aggregate:%s:%s", entityType, entityId);
     }
 
-    public ReviewAggregateDto getAggregate(EntityType entityType, String entityId) {
+    public ReviewAggregateDto getAggregate(ReviewEntityType entityType, String entityId) {
         String redisKey = getCacheKey(entityType, entityId);
 
         Object cachedObj = redisTemplate.opsForValue().get(redisKey);
@@ -119,7 +125,7 @@ public class ReviewQueryService {
      * yet" from "id dropped".
      */
     @Transactional(readOnly = true)
-    public AggregateBatchDto getAggregates(EntityType entityType, List<String> entityIds) {
+    public AggregateBatchDto getAggregates(ReviewEntityType entityType, List<String> entityIds) {
         List<String> distinct = entityIds.stream().filter(id -> id != null && !id.isBlank())
                 .distinct().toList();
 
@@ -136,9 +142,23 @@ public class ReviewQueryService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ReviewDto> getReviews(EntityType entityType, String entityId, Pageable pageable) {
-        return reviewRepository.findByEntityTypeAndEntityId(entityType, entityId, pageable)
+    public Page<ReviewDto> getReviews(ReviewEntityType entityType, String entityId, Pageable pageable) {
+        ReviewVisibility visibility = entityType == ReviewEntityType.RESTAURANT
+                        || entityType == ReviewEntityType.PRODUCT
+                ? ReviewVisibility.PUBLIC
+                : ReviewVisibility.PRIVATE;
+        return reviewRepository.findByEntityTypeAndEntityIdAndVisibility(
+                        entityType, entityId, visibility, pageable)
                 .map(ReviewMapper::toPublic);
+    }
+
+    /** Private feedback for a target, invoked only after the controller verifies the recipient. */
+    @Transactional(readOnly = true)
+    public Page<ReviewReceivedDto> getReceivedReviews(
+            ReviewEntityType entityType, String entityId, Pageable pageable) {
+        return reviewRepository.findByEntityTypeAndEntityIdAndVisibility(
+                        entityType, entityId, ReviewVisibility.PRIVATE, pageable)
+                .map(ReviewMapper::toReceived);
     }
 
     /**
@@ -156,14 +176,14 @@ public class ReviewQueryService {
 
     /** Reviews of one entity with author and order intact. Admin-only; see the controller. */
     @Transactional(readOnly = true)
-    public Page<ReviewDetailDto> getReviewsForAdmin(EntityType entityType, String entityId,
+    public Page<ReviewDetailDto> getReviewsForAdmin(ReviewEntityType entityType, String entityId,
                                                     Pageable pageable) {
         return reviewRepository.findByEntityTypeAndEntityId(entityType, entityId, pageable)
                 .map(ReviewMapper::toDetail);
     }
 
     /**
-     * What this customer may still say about this order, and what they have already said.
+     * What this order participant may still say about this order, and what they have already said.
      *
      * <p>A refusal is returned as data rather than thrown: the sheet needs to render "the window
      * closed on the 24th" as readily as it renders the stars, and an exception would give the UI
@@ -173,43 +193,65 @@ public class ReviewQueryService {
      * holding a database connection open across a network round trip is how a slow upstream becomes
      * an exhausted pool. The one repository read below carries its own transaction.
      */
-    public ReviewEligibilityDto getEligibility(UUID orderId, String userId) {
+    public ReviewEligibilityDto getEligibility(UUID orderId, String userId, RoleName authorRole) {
         OrderReviewContextDto context;
         try {
-            context = eligibilityService.resolve(orderId, userId);
+            context = eligibilityService.getOrderContext(orderId);
         } catch (ReviewNotAllowedException e) {
-            return ReviewEligibilityDto.builder()
-                    .orderId(orderId)
-                    .reviewable(false)
-                    .reason(e.getReason())
-                    .reasonDetail(e.getMessage())
-                    .targets(List.of())
-                    .build();
+            return refused(orderId, e.getReason(), e.getMessage());
         }
 
-        Map<String, Review> existing = reviewRepository.findByOrderId(orderId).stream()
+        UUID reviewerId;
+        try {
+            reviewerId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return refused(orderId, ReviewRejectionReason.NOT_YOUR_ORDER,
+                    "You are not a participant in this order.");
+        }
+
+        // The order service owns the role-to-target matrix. Send the complete order target set and
+        // let it return only the exact targets this actor may review; keeping a second matrix here
+        // would drift as roles or order participants change.
+        List<ReviewTargetDto> candidates = targetsFor(context, authorRole);
+        if (candidates.isEmpty()) {
+            return refused(orderId, ReviewRejectionReason.NOT_YOUR_ORDER,
+                    "You are not a participant in this order.");
+        }
+
+        List<OrderReviewTargetAuthorizationRequest> targetRequests = candidates.stream()
+                .map(target -> OrderReviewTargetAuthorizationRequest.builder()
+                        .targetType(target.getEntityType())
+                        .targetId(target.getEntityId())
+                        .build())
+                .toList();
+        List<OrderReviewAuthorizationResult> decisions = eligibilityService.authorizeTargets(
+                orderId, reviewerId, authorRole, targetRequests);
+        Map<String, OrderReviewAuthorizationResult> decisionByTarget = decisions.stream()
+                .collect(Collectors.toMap(d -> d.getTargetType() + ":" + d.getTargetId(), d -> d));
+
+        List<ReviewTargetDto> allowedTargets = candidates.stream()
+                .filter(target -> {
+                    OrderReviewAuthorizationResult decision = decisionByTarget.get(targetKey(target));
+                    return decision != null && decision.isAllowed();
+                })
+                .toList();
+        if (allowedTargets.isEmpty()) {
+            ReviewRejectionReason reason = rejectionReason(decisions);
+            return refused(orderId, reason, rejectionDetail(reason));
+        }
+
+        try {
+            eligibilityService.assertReviewWindowOpen(context);
+        } catch (ReviewNotAllowedException e) {
+            return refused(orderId, e.getReason(), e.getMessage());
+        }
+
+        Map<String, Review> existing = reviewRepository.findByOrderIdAndUserId(orderId, userId).stream()
                 .collect(Collectors.toMap(r -> r.getEntityType() + ":" + r.getEntityId(),
                         r -> r, (a, b) -> a, LinkedHashMap::new));
-
-        List<ReviewTargetDto> targets = new ArrayList<>();
-        if (context.getRestaurantId() != null) {
-            targets.add(target(EntityType.RESTAURANT, context.getRestaurantId().toString(),
-                    context.getRestaurantName() != null ? context.getRestaurantName() : "Restaurant",
-                    existing));
-        }
-        if (context.getDeliveryExecutiveId() != null) {
-            targets.add(target(EntityType.DRIVER, context.getDeliveryExecutiveId().toString(),
-                    DRIVER_DISPLAY_NAME, existing));
-        }
-        if (context.getItems() != null) {
-            // Distinct by menu item: an order with the same dish twice is one reviewable product.
-            context.getItems().stream()
-                    .filter(item -> item.getMenuItemId() != null)
-                    .collect(Collectors.toMap(item -> item.getMenuItemId().toString(),
-                            item -> item, (a, b) -> a, LinkedHashMap::new))
-                    .forEach((id, item) -> targets.add(
-                            target(EntityType.PRODUCT, id, itemName(item), existing)));
-        }
+        List<ReviewTargetDto> targets = allowedTargets.stream()
+                .map(target -> addExistingReview(target, existing.get(targetKey(target))))
+                .toList();
 
         return ReviewEligibilityDto.builder()
                 .orderId(orderId)
@@ -219,21 +261,91 @@ public class ReviewQueryService {
                 .build();
     }
 
+    private static List<ReviewTargetDto> targetsFor(OrderReviewContextDto context, RoleName role) {
+        List<ReviewTargetDto> targets = new ArrayList<>();
+        if (context.getCustomerId() != null) {
+            targets.add(target(ReviewEntityType.CUSTOMER, context.getCustomerId().toString(), "Customer", role));
+        }
+        if (context.getRestaurantId() != null) {
+            targets.add(target(ReviewEntityType.RESTAURANT, context.getRestaurantId().toString(),
+                    context.getRestaurantName() != null ? context.getRestaurantName() : "Restaurant", role));
+        }
+        if (context.getDeliveryExecutiveId() != null) {
+            targets.add(target(ReviewEntityType.DRIVER, context.getDeliveryExecutiveId().toString(),
+                    DRIVER_DISPLAY_NAME, role));
+        }
+        if (context.getItems() != null) {
+            context.getItems().stream()
+                    .filter(item -> item.getMenuItemId() != null)
+                    .collect(Collectors.toMap(item -> item.getMenuItemId().toString(),
+                            item -> item, (a, b) -> a, LinkedHashMap::new))
+                    .forEach((id, item) -> targets.add(
+                            target(ReviewEntityType.PRODUCT, id, itemName(item), role)));
+        }
+        return targets;
+    }
+
     private static String itemName(OrderReviewItemDto item) {
         return item.getName() != null && !item.getName().isBlank() ? item.getName() : "Item";
     }
 
-    private static ReviewTargetDto target(EntityType type, String entityId, String displayName,
-                                          Map<String, Review> existing) {
-        Review review = existing.get(type + ":" + entityId);
+    private static ReviewTargetDto target(ReviewEntityType type, String entityId, String displayName,
+                                         RoleName authorRole) {
         return ReviewTargetDto.builder()
                 .entityType(type)
                 .entityId(entityId)
                 .displayName(displayName)
+                .visibility(ReviewVisibility.forReview(authorRole, type))
+                .alreadyReviewed(false)
+                .build();
+    }
+
+    private static ReviewTargetDto addExistingReview(ReviewTargetDto target, Review review) {
+        return ReviewTargetDto.builder()
+                .entityType(target.getEntityType())
+                .entityId(target.getEntityId())
+                .displayName(target.getDisplayName())
+                .visibility(target.getVisibility())
                 .alreadyReviewed(review != null)
                 .existingRating(review != null ? review.getRating() : null)
                 .existingComment(review != null ? review.getComment() : null)
                 .existingReviewedAt(review != null ? review.getCreatedAt() : null)
+                .build();
+    }
+
+    private static String targetKey(ReviewTargetDto target) {
+        return target.getEntityType() + ":" + target.getEntityId();
+    }
+
+    private static ReviewRejectionReason rejectionReason(List<OrderReviewAuthorizationResult> decisions) {
+        List<String> reasons = decisions.stream()
+                .map(OrderReviewAuthorizationResult::getReasonCode)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (reasons.contains("ORDER_NOT_DELIVERED")) return ReviewRejectionReason.ORDER_NOT_DELIVERED;
+        if (reasons.contains("ACTOR_NOT_PARTICIPANT")) return ReviewRejectionReason.NOT_YOUR_ORDER;
+        if (reasons.contains("SELF_REVIEW")) return ReviewRejectionReason.SELF_REVIEW;
+        if (reasons.contains("ROLE_TARGET_NOT_ALLOWED")) return ReviewRejectionReason.ROLE_TARGET_NOT_ALLOWED;
+        return ReviewRejectionReason.TARGET_NOT_ON_ORDER;
+    }
+
+    private static String rejectionDetail(ReviewRejectionReason reason) {
+        return switch (reason) {
+            case ORDER_NOT_DELIVERED -> "This order has not been delivered yet.";
+            case SELF_REVIEW -> "You cannot leave feedback about yourself.";
+            case ROLE_TARGET_NOT_ALLOWED -> "Your account role cannot review these order targets.";
+            case TARGET_NOT_ON_ORDER -> "There are no reviewable targets on this order.";
+            default -> "You are not a participant in this order.";
+        };
+    }
+
+    private static ReviewEligibilityDto refused(UUID orderId, ReviewRejectionReason reason, String detail) {
+        return ReviewEligibilityDto.builder()
+                .orderId(orderId)
+                .reviewable(false)
+                .reason(reason)
+                .reasonDetail(detail)
+                .targets(List.of())
                 .build();
     }
 
@@ -244,7 +356,7 @@ public class ReviewQueryService {
      * {@code SimpleJpaRepository} is already {@code @Transactional(readOnly = true)}, so the read
      * is transactional where it actually happens.
      */
-    private ReviewAggregateDto fetchFromDbAndWarmCache(EntityType entityType, String entityId,
+    private ReviewAggregateDto fetchFromDbAndWarmCache(ReviewEntityType entityType, String entityId,
                                                        String redisKey) {
         ReviewAggregate aggregate = aggregateRepository.findById(new EntityKey(entityType, entityId))
                 .orElse(null);
@@ -271,7 +383,7 @@ public class ReviewQueryService {
                 .build();
     }
 
-    private static ReviewAggregateDto emptyAggregate(EntityType entityType, String entityId) {
+    private static ReviewAggregateDto emptyAggregate(ReviewEntityType entityType, String entityId) {
         return ReviewAggregateDto.builder()
                 .entityType(entityType)
                 .entityId(entityId)

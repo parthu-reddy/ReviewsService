@@ -5,7 +5,7 @@ import com.fooddelivery.reviews.enums.ReviewRejectionReason;
 import lombok.Getter;
 
 /**
- * A review was refused for a reason the customer can act on. The reason carries its own HTTP status
+ * A review was refused for a reason the participant can act on. The reason carries its own HTTP status
  * so the handler does not have to re-derive one, and its name reaches the client as an error code.
  */
 @Getter

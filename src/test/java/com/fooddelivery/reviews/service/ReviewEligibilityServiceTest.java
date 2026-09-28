@@ -20,7 +20,7 @@ import com.fooddelivery.common.dto.order.OrderReviewContextDto;
 import com.fooddelivery.common.dto.order.OrderReviewItemDto;
 import com.fooddelivery.common.enums.DeliveryStatus;
 import com.fooddelivery.reviews.config.ReviewProperties;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import com.fooddelivery.reviews.enums.ReviewRejectionReason;
 import com.fooddelivery.reviews.exception.ExternalServiceUnavailableException;
 import com.fooddelivery.reviews.exception.ReviewNotAllowedException;
@@ -224,9 +224,9 @@ class ReviewEligibilityServiceTest {
         ReviewEligibilityService service = serviceAt(1);
 
         assertThatCode(() -> {
-            service.assertTargetOnOrder(ctx, EntityType.RESTAURANT, OUTLET_ID.toString());
-            service.assertTargetOnOrder(ctx, EntityType.DRIVER, DRIVER_ID.toString());
-            service.assertTargetOnOrder(ctx, EntityType.PRODUCT, ITEM_ID.toString());
+            service.assertTargetOnOrder(ctx, ReviewEntityType.RESTAURANT, OUTLET_ID.toString());
+            service.assertTargetOnOrder(ctx, ReviewEntityType.DRIVER, DRIVER_ID.toString());
+            service.assertTargetOnOrder(ctx, ReviewEntityType.PRODUCT, ITEM_ID.toString());
         }).doesNotThrowAnyException();
     }
 
@@ -235,7 +235,7 @@ class ReviewEligibilityServiceTest {
         OrderReviewContextDto ctx = context(DeliveryStatus.DELIVERED, DELIVERED_AT);
 
         assertThatThrownBy(() -> serviceAt(1)
-                .assertTargetOnOrder(ctx, EntityType.RESTAURANT, UUID.randomUUID().toString()))
+                .assertTargetOnOrder(ctx, ReviewEntityType.RESTAURANT, UUID.randomUUID().toString()))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.TARGET_NOT_ON_ORDER);
@@ -246,7 +246,7 @@ class ReviewEligibilityServiceTest {
         OrderReviewContextDto ctx = context(DeliveryStatus.DELIVERED, DELIVERED_AT);
 
         assertThatThrownBy(() -> serviceAt(1)
-                .assertTargetOnOrder(ctx, EntityType.PRODUCT, UUID.randomUUID().toString()))
+                .assertTargetOnOrder(ctx, ReviewEntityType.PRODUCT, UUID.randomUUID().toString()))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.TARGET_NOT_ON_ORDER);
@@ -259,7 +259,7 @@ class ReviewEligibilityServiceTest {
         ctx.setDeliveryExecutiveId(null);
 
         assertThatThrownBy(() -> serviceAt(1)
-                .assertTargetOnOrder(ctx, EntityType.DRIVER, DRIVER_ID.toString()))
+                .assertTargetOnOrder(ctx, ReviewEntityType.DRIVER, DRIVER_ID.toString()))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.TARGET_NOT_ON_ORDER);

@@ -3,7 +3,8 @@ package com.fooddelivery.reviews.dto;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.common.enums.RoleName;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -19,9 +20,9 @@ import lombok.NoArgsConstructor;
  * type rather than of a runtime branch that a later edit could drop. Anything that needs those
  * fields uses {@link ReviewDetailDto}, which only the author and administrators ever receive.
  *
- * <p>{@code authorDisplayName} is null for {@code DRIVER} reviews regardless of what is stored: a
- * driver who can attach a one-star rating to a name knows that customer's address, because they
- * delivered to it.
+ * <p>{@code authorDisplayName} is null for {@code DRIVER} reviews regardless of what is stored:
+ * feedback to a delivery partner stays anonymous, since the recipient may be able to infer the
+ * reviewer from the order and delivery details.
  */
 @Data
 @Builder
@@ -33,7 +34,7 @@ public class ReviewDto {
     private UUID id;
 
     @NotNull
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @NotNull
     private String entityId;
@@ -45,6 +46,8 @@ public class ReviewDto {
 
     /** "Priya R.", or null when the author is withheld or the order carried no name. */
     private String authorDisplayName;
+
+    private RoleName authorRole;
 
     @NotNull
     private Instant createdAt;

@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
  *
  * <p>When {@link #reviewable} is false, {@link #reason} says why so the UI can explain it — "this
  * order was cancelled", "the 14-day window has closed" — instead of hiding the action and leaving
- * the customer to wonder where it went.
+ * the participant to wonder where it went.
  */
 @Data
 @Builder

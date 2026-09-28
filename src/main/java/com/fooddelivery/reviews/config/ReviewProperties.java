@@ -12,12 +12,11 @@ import lombok.Setter;
 public class ReviewProperties {
 
     /**
-     * How long after delivery a customer may still review the order.
+     * How long after delivery an order participant may still review the order.
      *
      * <p>A window exists because a rating written months later is about a memory, not a meal, and
      * because an unbounded window makes every order in history a permanent write target. Fourteen
-     * days is long enough to cover someone who orders on a Friday and gets round to it a fortnight
-     * later.
+     * days gives each participant a reasonable time to leave feedback.
      */
     private int windowDays = 14;
 

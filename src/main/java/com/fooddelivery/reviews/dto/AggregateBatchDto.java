@@ -2,7 +2,7 @@ package com.fooddelivery.reviews.dto;
 
 import java.util.List;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -24,7 +24,7 @@ import lombok.NoArgsConstructor;
 public class AggregateBatchDto {
 
     @NotNull
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @NotNull
     private List<ReviewAggregateDto> aggregates;

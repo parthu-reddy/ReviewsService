@@ -1,13 +1,17 @@
 package com.fooddelivery.reviews.web;
 
 import com.fooddelivery.common.dto.ApiResponse;
+import com.fooddelivery.common.client.RestaurantServiceClient;
+import com.fooddelivery.common.enums.RoleName;
 import com.fooddelivery.reviews.dto.AggregateBatchDto;
 import com.fooddelivery.reviews.dto.CreateReviewRequest;
 import com.fooddelivery.reviews.dto.ReviewAggregateDto;
 import com.fooddelivery.reviews.dto.ReviewDetailDto;
 import com.fooddelivery.reviews.dto.ReviewDto;
 import com.fooddelivery.reviews.dto.ReviewEligibilityDto;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.reviews.dto.ReviewReceivedDto;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.reviews.security.ReviewActorResolver;
 import com.fooddelivery.reviews.service.ReviewCommandService;
 import com.fooddelivery.reviews.service.ReviewQueryService;
 
@@ -24,17 +28,18 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
 /**
  * The review surface.
  *
- * <p>The caller's identity comes from {@link Principal}, never from reading {@code X-User-Id}
+ * <p>The caller's identity comes from the verified {@link Authentication}, never from reading {@code X-User-Id}
  * directly. Two reasons, both load-bearing: {@code SecurityContextFilter} only populates the
  * security context once it has <em>verified</em> the gateway's identity signature, so the principal
  * is authenticated while the raw header is merely present; and a declared {@code @RequestHeader}
@@ -56,41 +61,44 @@ public class ReviewController {
 
     private final ReviewCommandService reviewCommandService;
     private final ReviewQueryService reviewQueryService;
+    private final ReviewActorResolver reviewActorResolver;
+    private final RestaurantServiceClient restaurantServiceClient;
 
     /**
-     * Submits every review a customer is making about one order.
-     *
-     * <p>Only a customer writes reviews. A restaurant owner rating their own outlet, or a driver
-     * rating themselves, is not a scenario this platform has — and the eligibility check would
-     * refuse it anyway, since neither placed the order.
+     * Submits all selected feedback for one order. {@code actorRole} selects the active portal, then
+     * is checked against the gateway-verified authorities before it is used.
      */
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'RESTAURANT', 'DELIVERY')")
     @PostMapping
     public ResponseEntity<ApiResponse<List<ReviewDetailDto>>> createReviews(
             @Valid @RequestBody CreateReviewRequest request,
-            Principal principal) {
-        String userId = principal.getName();
+            @RequestParam("actorRole") RoleName actorRole,
+            Authentication authentication) {
+        RoleName verifiedRole = reviewActorResolver.requireReviewRole(authentication, actorRole);
+        String userId = authentication.getName();
         log.info("POST /api/v1/reviews - orderId={}, entries={}, userId={}",
                 request.getOrderId(), request.getEntries().size(), userId);
 
-        List<ReviewDetailDto> created = reviewCommandService.createReviews(request, userId);
+        List<ReviewDetailDto> created = reviewCommandService.createReviews(request, userId, verifiedRole);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(created, "Thanks — your review has been recorded."));
     }
 
     /**
-     * What this customer may still say about one of their orders, and what they already said.
+     * What the selected order participant may still say, and what they already said.
      *
      * <p>Drives the whole rating sheet in a single call — including the already-reviewed entries,
      * which is what lets an immutable review read as "submitted" rather than as a dead button.
      */
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'RESTAURANT', 'DELIVERY')")
     @GetMapping("/orders/{orderId}/eligibility")
     public ResponseEntity<ApiResponse<ReviewEligibilityDto>> getEligibility(
             @PathVariable UUID orderId,
-            Principal principal) {
+            @RequestParam("actorRole") RoleName actorRole,
+            Authentication authentication) {
+        RoleName verifiedRole = reviewActorResolver.requireReviewRole(authentication, actorRole);
         ReviewEligibilityDto eligibility =
-                reviewQueryService.getEligibility(orderId, principal.getName());
+                reviewQueryService.getEligibility(orderId, authentication.getName(), verifiedRole);
         return ResponseEntity.ok(ApiResponse.success(eligibility, "Eligibility resolved"));
     }
 
@@ -98,12 +106,12 @@ public class ReviewController {
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<PagedModel<ReviewDetailDto>>> getMyReviews(
-            Principal principal,
+            Authentication authentication,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<ReviewDetailDto> reviews =
-                reviewQueryService.getMyReviews(principal.getName(), pageable);
+                reviewQueryService.getMyReviews(authentication.getName(), pageable);
         return ResponseEntity.ok(
                 ApiResponse.success(new PagedModel<>(reviews), "Your reviews retrieved"));
     }
@@ -112,7 +120,7 @@ public class ReviewController {
     @PreAuthorize("@reviewAccessPolicy.canReadAggregate(authentication, #entityType, #entityId)")
     @GetMapping("/aggregate")
     public ResponseEntity<ApiResponse<ReviewAggregateDto>> getAggregate(
-            @RequestParam EntityType entityType,
+            @RequestParam ReviewEntityType entityType,
             @RequestParam String entityId) {
         ReviewAggregateDto aggregate = reviewQueryService.getAggregate(entityType, entityId);
         return ResponseEntity.ok(ApiResponse.success(aggregate, "Aggregate retrieved successfully"));
@@ -128,11 +136,11 @@ public class ReviewController {
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/aggregates")
     public ResponseEntity<ApiResponse<AggregateBatchDto>> getAggregates(
-            @RequestParam EntityType entityType,
+            @RequestParam ReviewEntityType entityType,
             @RequestParam List<String> entityIds) {
-        if (entityType == EntityType.DRIVER) {
+        if (entityType == ReviewEntityType.DRIVER || entityType == ReviewEntityType.CUSTOMER) {
             return ResponseEntity.badRequest().body(ApiResponse.error(
-                    "Driver ratings cannot be read in bulk.", "BATCH_NOT_ALLOWED_FOR_DRIVER"));
+                    "Private participant ratings cannot be read in bulk.", "BATCH_NOT_ALLOWED_FOR_PRIVATE_TARGET"));
         }
         if (entityIds.size() > ReviewQueryService.MAX_BATCH_IDS) {
             return ResponseEntity.badRequest().body(ApiResponse.error(
@@ -153,7 +161,7 @@ public class ReviewController {
     @PreAuthorize("@reviewAccessPolicy.canListReviews(authentication, #entityType, #entityId)")
     @GetMapping
     public ResponseEntity<ApiResponse<PagedModel<ReviewDto>>> getReviews(
-            @RequestParam EntityType entityType,
+            @RequestParam ReviewEntityType entityType,
             @RequestParam String entityId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
@@ -161,5 +169,56 @@ public class ReviewController {
         Page<ReviewDto> reviews = reviewQueryService.getReviews(entityType, entityId, pageable);
         return ResponseEntity.ok(
                 ApiResponse.success(new PagedModel<>(reviews), "Reviews retrieved successfully"));
+    }
+
+    /** Private feedback for the active participant. Reviewer id and order id are never returned. */
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'RESTAURANT', 'DELIVERY')")
+    @GetMapping("/received")
+    public ResponseEntity<ApiResponse<PagedModel<ReviewReceivedDto>>> getReceivedReviews(
+            @RequestParam("actorRole") RoleName actorRole,
+            @RequestParam(value = "outletId", required = false) String outletId,
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
+        RoleName verifiedRole = reviewActorResolver.requireReviewRole(authentication, actorRole);
+        String entityId;
+        ReviewEntityType entityType;
+
+        switch (verifiedRole) {
+            case CUSTOMER -> {
+                entityType = ReviewEntityType.CUSTOMER;
+                entityId = authentication.getName();
+                if (outletId != null) {
+                    throw new AccessDeniedException("Customers can only read feedback addressed to themselves.");
+                }
+            }
+            case DELIVERY -> {
+                entityType = ReviewEntityType.DRIVER;
+                entityId = authentication.getName();
+                if (outletId != null) {
+                    throw new AccessDeniedException("Delivery partners can only read feedback addressed to themselves.");
+                }
+            }
+            case RESTAURANT -> {
+                if (outletId == null || outletId.isBlank()) {
+                    throw new IllegalArgumentException("An outletId is required for restaurant feedback.");
+                }
+                boolean ownsOutlet = restaurantServiceClient
+                        .getOwnerOutlets(authentication.getName(), "reviews-service")
+                        .stream()
+                        .anyMatch(outletId::equalsIgnoreCase);
+                if (!ownsOutlet) {
+                    throw new AccessDeniedException("This outlet does not belong to the authenticated restaurant owner.");
+                }
+                entityType = ReviewEntityType.RESTAURANT;
+                entityId = outletId;
+            }
+            case ADMIN -> throw new AccessDeniedException("Admin accounts use the moderation review surface.");
+            default -> throw new AccessDeniedException("This role cannot read received reviews.");
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<ReviewReceivedDto> reviews = reviewQueryService.getReceivedReviews(entityType, entityId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(new PagedModel<>(reviews), "Private feedback retrieved"));
     }
 }

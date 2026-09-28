@@ -20,7 +20,7 @@ import com.fooddelivery.reviews.dto.ReviewTargetDto;
 import com.fooddelivery.reviews.entity.EntityKey;
 import com.fooddelivery.reviews.entity.Review;
 import com.fooddelivery.reviews.entity.ReviewAggregate;
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import com.fooddelivery.reviews.enums.ReviewRejectionReason;
 import com.fooddelivery.reviews.exception.ReviewNotAllowedException;
 import com.fooddelivery.reviews.repository.AggregateRepository;
@@ -88,8 +88,8 @@ class ReviewQueryServiceTest {
 
         assertThat(result.isReviewable()).isTrue();
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getEntityType)
-                .containsExactly(EntityType.RESTAURANT, EntityType.DRIVER,
-                        EntityType.PRODUCT, EntityType.PRODUCT);
+                .containsExactly(ReviewEntityType.RESTAURANT, ReviewEntityType.DRIVER,
+                        ReviewEntityType.PRODUCT, ReviewEntityType.PRODUCT);
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getDisplayName)
                 .containsExactly("Bombay Canteen", ReviewQueryService.DRIVER_DISPLAY_NAME,
                         "Butter Chicken", "Naan");
@@ -103,7 +103,7 @@ class ReviewQueryServiceTest {
 
         ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
 
-        assertThat(result.getTargets()).filteredOn(t -> t.getEntityType() == EntityType.PRODUCT)
+        assertThat(result.getTargets()).filteredOn(t -> t.getEntityType() == ReviewEntityType.PRODUCT)
                 .hasSize(1);
     }
 
@@ -118,7 +118,7 @@ class ReviewQueryServiceTest {
         ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
 
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getEntityType)
-                .doesNotContain(EntityType.DRIVER);
+                .doesNotContain(ReviewEntityType.DRIVER);
     }
 
     /**
@@ -131,14 +131,14 @@ class ReviewQueryServiceTest {
         when(eligibilityService.resolve(any(), any())).thenReturn(context(DISH_A));
         when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(
                 Review.builder()
-                        .entityType(EntityType.RESTAURANT).entityId(OUTLET_ID.toString())
+                        .entityType(ReviewEntityType.RESTAURANT).entityId(OUTLET_ID.toString())
                         .id(UUID.randomUUID()).orderId(ORDER_ID).userId(CUSTOMER_ID.toString())
                         .rating(4).comment("Quick and hot").createdAt(reviewedAt).build()));
 
         ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
 
         ReviewTargetDto restaurant = result.getTargets().stream()
-                .filter(t -> t.getEntityType() == EntityType.RESTAURANT).findFirst().orElseThrow();
+                .filter(t -> t.getEntityType() == ReviewEntityType.RESTAURANT).findFirst().orElseThrow();
         assertThat(restaurant.isAlreadyReviewed()).isTrue();
         assertThat(restaurant.getExistingRating()).isEqualTo(4);
         assertThat(restaurant.getExistingComment()).isEqualTo("Quick and hot");
@@ -146,7 +146,7 @@ class ReviewQueryServiceTest {
 
         // The driver was not reviewed, so that target stays open.
         ReviewTargetDto driver = result.getTargets().stream()
-                .filter(t -> t.getEntityType() == EntityType.DRIVER).findFirst().orElseThrow();
+                .filter(t -> t.getEntityType() == ReviewEntityType.DRIVER).findFirst().orElseThrow();
         assertThat(driver.isAlreadyReviewed()).isFalse();
         assertThat(driver.getExistingRating()).isNull();
     }
@@ -171,7 +171,7 @@ class ReviewQueryServiceTest {
         when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
 
         assertThat(service().getEligibility(ORDER_ID, CUSTOMER_ID.toString()).getTargets())
-                .filteredOn(t -> t.getEntityType() == EntityType.PRODUCT)
+                .filteredOn(t -> t.getEntityType() == ReviewEntityType.PRODUCT)
                 .extracting(ReviewTargetDto::getDisplayName)
                 .containsExactly("Item");
     }
@@ -187,7 +187,7 @@ class ReviewQueryServiceTest {
     void idsWithNoReviewsComeBackAsAnExplicitZero() {
         when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 3, "4.33")));
 
-        AggregateBatchDto batch = service().getAggregates(EntityType.PRODUCT,
+        AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT,
                 List.of(DISH_A.toString(), DISH_B.toString()));
 
         assertThat(batch.getAggregates()).hasSize(2);
@@ -203,7 +203,7 @@ class ReviewQueryServiceTest {
     void aRepeatedOrBlankIdIsRequestedOnlyOnce() {
         when(aggregateRepository.findAllById(any())).thenReturn(List.of());
 
-        AggregateBatchDto batch = service().getAggregates(EntityType.PRODUCT,
+        AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT,
                 java.util.Arrays.asList(DISH_A.toString(), DISH_A.toString(), "  ", null));
 
         assertThat(batch.getAggregates()).hasSize(1);
@@ -214,9 +214,9 @@ class ReviewQueryServiceTest {
     void aKnownAggregateKeepsItsStoredAverage() {
         when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 7, "4.29")));
 
-        AggregateBatchDto batch = service().getAggregates(EntityType.PRODUCT, List.of(DISH_A.toString()));
+        AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT, List.of(DISH_A.toString()));
 
-        assertThat(batch.getEntityType()).isEqualTo(EntityType.PRODUCT);
+        assertThat(batch.getEntityType()).isEqualTo(ReviewEntityType.PRODUCT);
         assertThat(batch.getAggregates().get(0).getTotalReviews()).isEqualTo(7);
         assertThat(batch.getAggregates().get(0).getAverageRating()).isEqualByComparingTo("4.29");
     }
@@ -224,7 +224,7 @@ class ReviewQueryServiceTest {
     // ------------------------------------------------------------------ helpers
 
     private ReviewAggregate withReviews(UUID entityId, int count, String ignoredAverage) {
-        ReviewAggregate aggregate = new ReviewAggregate(new EntityKey(EntityType.PRODUCT, entityId.toString()));
+        ReviewAggregate aggregate = new ReviewAggregate(new EntityKey(ReviewEntityType.PRODUCT, entityId.toString()));
         // Built through the real fold so the average is whatever the arithmetic actually produces,
         // rather than a value the test asserts against itself.
         int[] ratings = switch (count) {

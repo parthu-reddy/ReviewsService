@@ -45,7 +45,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                                 ReviewProperties properties) {
         this.proxyManager = proxyManager;
         this.objectMapper = objectMapper;
-        // Writes are far scarcer than reads: a customer submits reviews for an order once, while a
+        // Writes are far scarcer than reads: a participant submits reviews for an order once, while a
         // single restaurant page issues several aggregate and list reads. One bucket for both would
         // either throttle browsing or leave review spam unbounded.
         this.writeConfiguration = BucketConfiguration.builder()

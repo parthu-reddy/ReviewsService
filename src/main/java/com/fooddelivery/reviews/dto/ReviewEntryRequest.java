@@ -1,6 +1,6 @@
 package com.fooddelivery.reviews.dto;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -22,7 +22,7 @@ public class ReviewEntryRequest {
 
     @NotNull(message = "Entity type is required")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     /**
      * Must be a target that was actually on the order: the outlet, the assigned driver, or one of

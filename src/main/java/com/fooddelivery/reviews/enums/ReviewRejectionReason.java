@@ -5,22 +5,28 @@ import org.springframework.http.HttpStatus;
 /**
  * Why a review was refused. Carried to the client as {@code ApiResponse.errorCode} so the UI can
  * explain the refusal — "this order was cancelled", "the window has closed" — rather than showing a
- * generic failure or, worse, hiding the action and leaving the customer wondering.
+ * generic failure or, worse, hiding the action and leaving the participant wondering.
  */
 public enum ReviewRejectionReason {
 
     /** No such order, or the order service does not know about it. */
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND),
 
-    /** The caller is not the customer who placed it. */
+    /** The caller is not one of the authenticated participants in the order. */
     NOT_YOUR_ORDER(HttpStatus.FORBIDDEN),
+
+    /** The authenticated participant role cannot review this target category. */
+    ROLE_TARGET_NOT_ALLOWED(HttpStatus.FORBIDDEN),
+
+    /** An account cannot leave feedback about itself. */
+    SELF_REVIEW(HttpStatus.FORBIDDEN),
 
     /**
      * The order has not reached {@code DeliveryStatus.DELIVERED}.
      *
      * <p>Read from delivery status, not order status: {@code OrderStatus} has no DELIVERED value by
      * design, and its last non-terminal value, HANDED_OVER, means the rider has the food — not that
-     * the customer does.
+     * the current participant does.
      */
     ORDER_NOT_DELIVERED(HttpStatus.CONFLICT),
 

@@ -67,7 +67,7 @@ public class ReviewsGlobalExceptionHandler extends ResponseEntityExceptionHandle
     }
 
     /**
-     * A refusal the customer can act on. The status comes from the reason itself rather than being
+     * A refusal the participant can act on. The status comes from the reason itself rather than being
      * re-derived here, and the reason's name goes out as {@code errorCode} so the UI can say
      * "the 14-day window has closed" instead of "something went wrong".
      */

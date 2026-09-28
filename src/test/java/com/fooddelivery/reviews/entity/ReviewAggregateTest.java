@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ReviewAggregateTest {
 
     private static ReviewAggregate fresh() {
-        return new ReviewAggregate(new EntityKey(EntityType.RESTAURANT, "outlet-1"));
+        return new ReviewAggregate(new EntityKey(ReviewEntityType.RESTAURANT, "outlet-1"));
     }
 
     @Test

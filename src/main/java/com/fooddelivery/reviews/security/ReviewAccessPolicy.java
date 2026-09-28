@@ -4,7 +4,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,11 +18,10 @@ import lombok.extern.slf4j.Slf4j;
  * <p>The asymmetry is deliberate:
  *
  * <ul>
- *   <li><b>RESTAURANT, PRODUCT</b> — any signed-in user. These are reviews of a business and of a
+ *   <li><b>RESTAURANT, PRODUCT</b> — any signed-in user for public reviews. These are reviews of a business and of a
  *       dish, written to be read by whoever is deciding what to order.
- *   <li><b>DRIVER</b> — the driver themself, an administrator, or an internal service. A driver's
- *       average is performance data about a named person, and the individual reviews behind it are
- *       feedback on their work. Neither belongs to an arbitrary signed-in stranger.
+ *   <li><b>DRIVER, CUSTOMER</b> — the reviewed person themself, an administrator, or an internal
+ *       service. These are private participant feedback, not public reputation pages.
  * </ul>
  */
 @Slf4j
@@ -33,16 +32,19 @@ public class ReviewAccessPolicy {
     private static final String ROLE_SERVICE = "ROLE_SERVICE";
 
     /** Whether the caller may read this entity's average and count. */
-    public boolean canReadAggregate(Authentication authentication, EntityType entityType, String entityId) {
+    public boolean canReadAggregate(Authentication authentication, ReviewEntityType entityType, String entityId) {
+        if (entityType == ReviewEntityType.CUSTOMER) {
+            return false;
+        }
         return isAllowed(authentication, entityType, entityId);
     }
 
     /** Whether the caller may list this entity's individual reviews. */
-    public boolean canListReviews(Authentication authentication, EntityType entityType, String entityId) {
+    public boolean canListReviews(Authentication authentication, ReviewEntityType entityType, String entityId) {
         return isAllowed(authentication, entityType, entityId);
     }
 
-    private boolean isAllowed(Authentication authentication, EntityType entityType, String entityId) {
+    private boolean isAllowed(Authentication authentication, ReviewEntityType entityType, String entityId) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;
         }
@@ -50,7 +52,7 @@ public class ReviewAccessPolicy {
             return false;
         }
 
-        if (entityType != EntityType.DRIVER) {
+        if (entityType == ReviewEntityType.RESTAURANT || entityType == ReviewEntityType.PRODUCT) {
             return true;
         }
 
@@ -61,7 +63,7 @@ public class ReviewAccessPolicy {
         boolean isSelf = entityId != null && authentication.getName() != null && 
                 entityId.trim().equalsIgnoreCase(authentication.getName().trim());
         if (!isSelf) {
-            log.warn("Refused driver review access: principal={} requested driverId={}",
+            log.warn("Refused private participant review access: principal={} requested entityId={}",
                     authentication.getName(), entityId);
         }
         return isSelf;

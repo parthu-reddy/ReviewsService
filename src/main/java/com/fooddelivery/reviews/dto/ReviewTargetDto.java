@@ -2,7 +2,8 @@ package com.fooddelivery.reviews.dto;
 
 import java.time.Instant;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.reviews.enums.ReviewVisibility;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -12,7 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * One thing on an order that can be rated, and what the customer has already said about it.
+ * One thing on an order that can be rated, and what the participant has already said about it.
  *
  * <p>Carrying the existing review rather than merely a boolean is what lets the rating sheet render
  * "You said: ★★★★☆ — Quick and hot" for something already reviewed. A review cannot be edited, so
@@ -25,7 +26,7 @@ import lombok.NoArgsConstructor;
 public class ReviewTargetDto {
 
     @NotNull
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @NotNull
     private String entityId;
@@ -36,6 +37,8 @@ public class ReviewTargetDto {
      */
     @NotNull
     private String displayName;
+
+    private ReviewVisibility visibility;
 
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     private boolean alreadyReviewed;

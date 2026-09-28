@@ -1,6 +1,6 @@
 package com.fooddelivery.reviews.entity;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -20,7 +20,7 @@ public class ReviewId implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private EntityType entityType;
+    private ReviewEntityType entityType;
     private String entityId;
     private UUID id;
 }

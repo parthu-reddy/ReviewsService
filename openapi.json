@@ -19,7 +19,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           }
         }, {
           "name" : "entityId",
@@ -66,6 +66,15 @@
       "post" : {
         "tags" : [ "review-controller" ],
         "operationId" : "createReviews",
+        "parameters" : [ {
+          "name" : "actorRole",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "DELIVERY", "RESTAURANT", "ADMIN" ]
+          }
+        } ],
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -102,6 +111,14 @@
             "type" : "string",
             "format" : "uuid"
           }
+        }, {
+          "name" : "actorRole",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "DELIVERY", "RESTAURANT", "ADMIN" ]
+          }
         } ],
         "responses" : {
           "200" : {
@@ -110,6 +127,61 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseReviewEligibilityDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reviews/received" : {
+      "get" : {
+        "tags" : [ "review-controller" ],
+        "operationId" : "getReceivedReviews",
+        "parameters" : [ {
+          "name" : "actorRole",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "DELIVERY", "RESTAURANT", "ADMIN" ]
+          }
+        }, {
+          "name" : "outletId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "minimum" : 0,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "maximum" : 50,
+            "minimum" : 1,
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePagedModelReviewReceivedDto"
                 }
               }
             }
@@ -167,7 +239,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           }
         }, {
           "name" : "entityIds",
@@ -204,7 +276,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           }
         }, {
           "name" : "entityId",
@@ -238,7 +310,7 @@
           "required" : true,
           "schema" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           }
         }, {
           "name" : "entityId",
@@ -357,7 +429,7 @@
         "properties" : {
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "entityId" : {
             "type" : "string"
@@ -400,8 +472,8 @@
           }
         }
       },
-      "ReviewDetailDto" : {
-        "required" : [ "createdAt", "entityId", "entityType", "id", "orderId", "rating", "userId" ],
+      "ReviewReceivedDto" : {
+        "required" : [ "authorRole", "createdAt", "entityId", "entityType", "id", "rating" ],
         "type" : "object",
         "properties" : {
           "id" : {
@@ -410,7 +482,76 @@
           },
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
+          },
+          "entityId" : {
+            "type" : "string"
+          },
+          "authorRole" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "RESTAURANT", "DELIVERY" ]
+          },
+          "rating" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "comment" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PagedModelReviewReceivedDto" : {
+        "required" : [ "content" ],
+        "type" : "object",
+        "properties" : {
+          "content" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewReceivedDto"
+            }
+          },
+          "page" : {
+            "$ref" : "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "ApiResponsePagedModelReviewReceivedDto" : {
+        "required" : [ "message", "success", "timestamp" ],
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "errorCode" : {
+            "type" : "string"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/PagedModelReviewReceivedDto"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ReviewDetailDto" : {
+        "required" : [ "authorRole", "createdAt", "entityId", "entityType", "id", "orderId", "rating", "userId", "visibility" ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "entityType" : {
+            "type" : "string",
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "entityId" : {
             "type" : "string"
@@ -421,6 +562,14 @@
           },
           "userId" : {
             "type" : "string"
+          },
+          "authorRole" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "RESTAURANT", "DELIVERY" ]
+          },
+          "visibility" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "PRIVATE" ]
           },
           "authorDisplayName" : {
             "type" : "string"
@@ -507,7 +656,7 @@
           },
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "entityId" : {
             "type" : "string"
@@ -521,6 +670,10 @@
           },
           "authorDisplayName" : {
             "type" : "string"
+          },
+          "authorRole" : {
+            "type" : "string",
+            "enum" : [ "CUSTOMER", "RESTAURANT", "DELIVERY" ]
           },
           "createdAt" : {
             "type" : "string",
@@ -563,7 +716,7 @@
           },
           "reason" : {
             "type" : "string",
-            "enum" : [ "ORDER_NOT_FOUND", "NOT_YOUR_ORDER", "ORDER_NOT_DELIVERED", "REVIEW_WINDOW_CLOSED", "TARGET_NOT_ON_ORDER", "ALREADY_REVIEWED", "DUPLICATE_ENTRY" ]
+            "enum" : [ "ORDER_NOT_FOUND", "NOT_YOUR_ORDER", "ORDER_NOT_DELIVERED", "REVIEW_WINDOW_CLOSED", "TARGET_NOT_ON_ORDER", "ALREADY_REVIEWED", "DUPLICATE_ENTRY", "ROLE_TARGET_NOT_ALLOWED", "SELF_REVIEW" ]
           },
           "reasonDetail" : {
             "type" : "string"
@@ -581,18 +734,22 @@
         }
       },
       "ReviewTargetDto" : {
-        "required" : [ "alreadyReviewed", "displayName", "entityId", "entityType" ],
+        "required" : [ "alreadyReviewed", "displayName", "entityId", "entityType", "visibility" ],
         "type" : "object",
         "properties" : {
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "entityId" : {
             "type" : "string"
           },
           "displayName" : {
             "type" : "string"
+          },
+          "visibility" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "PRIVATE" ]
           },
           "alreadyReviewed" : {
             "type" : "boolean"
@@ -653,7 +810,7 @@
         "properties" : {
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "aggregates" : {
             "type" : "array",
@@ -691,7 +848,7 @@
         "properties" : {
           "entityType" : {
             "type" : "string",
-            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT" ]
+            "enum" : [ "RESTAURANT", "DRIVER", "PRODUCT", "CUSTOMER" ]
           },
           "entityId" : {
             "type" : "string"

@@ -3,7 +3,9 @@ package com.fooddelivery.reviews.dto;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.fooddelivery.reviews.enums.EntityType;
+import com.fooddelivery.common.enums.ReviewEntityType;
+import com.fooddelivery.common.enums.RoleName;
+import com.fooddelivery.reviews.enums.ReviewVisibility;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -32,7 +34,7 @@ public class ReviewDetailDto {
     private UUID id;
 
     @NotNull
-    private EntityType entityType;
+    private ReviewEntityType entityType;
 
     @NotNull
     private String entityId;
@@ -42,6 +44,12 @@ public class ReviewDetailDto {
 
     @NotNull
     private String userId;
+
+    @NotNull
+    private RoleName authorRole;
+
+    @NotNull
+    private ReviewVisibility visibility;
 
     private String authorDisplayName;
 
