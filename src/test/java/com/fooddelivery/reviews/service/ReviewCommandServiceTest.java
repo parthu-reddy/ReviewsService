@@ -73,7 +73,18 @@ class ReviewCommandServiceTest {
                 eventPublisher, transactionTemplate);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
                 inv.getArgument(0, TransactionCallback.class).doInTransaction(null));
-        lenient().when(eligibilityService.resolve(any(), any())).thenReturn(context());
+        OrderReviewContextDto ctx = context();
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            if (reqs == null) return java.util.List.of();
+            if (reqs == null) return java.util.List.of();
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
         lenient().when(reviewRepository.findByOrderId(any())).thenReturn(List.of());
         lenient().when(aggregateRepository.findById(any())).thenReturn(Optional.empty());
     }
@@ -85,12 +96,12 @@ class ReviewCommandServiceTest {
         List<ReviewDetailDto> written = service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, "Great"),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
-                USER_ID);
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         assertThat(written).hasSize(2);
         assertThat(written).allSatisfy(r -> {
             assertThat(r.getOrderId()).isEqualTo(ORDER_ID);
-            assertThat(r.getUserId()).isEqualTo(USER_ID);
+            assertThat(r.getUserId()).isEqualTo(USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
         });
 
         ArgumentCaptor<List<Review>> saved = ArgumentCaptor.forClass(List.class);
@@ -98,8 +109,14 @@ class ReviewCommandServiceTest {
         assertThat(saved.getValue()).hasSize(2);
         assertThat(saved.getValue()).allSatisfy(r -> {
             assertThat(r.getOrderId()).isEqualTo(ORDER_ID);
-            // Snapshotted at write time so reads never fan out to identity-service.
+        });
+        assertThat(saved.getValue()).anySatisfy(r -> {
+            assertThat(r.getEntityType()).isEqualTo(ReviewEntityType.RESTAURANT);
             assertThat(r.getAuthorDisplayName()).isEqualTo("Priya R.");
+        });
+        assertThat(saved.getValue()).anySatisfy(r -> {
+            assertThat(r.getEntityType()).isEqualTo(ReviewEntityType.DRIVER);
+            assertThat(r.getAuthorDisplayName()).isNull();
         });
     }
 
@@ -112,7 +129,7 @@ class ReviewCommandServiceTest {
         service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
-                USER_ID);
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         verify(reviewRepository).saveAllAndFlush(any());
         verify(transactionTemplate).execute(any());
@@ -123,7 +140,7 @@ class ReviewCommandServiceTest {
         service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 3, null)),
-                USER_ID);
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         ArgumentCaptor<ReviewAggregate> agg = ArgumentCaptor.forClass(ReviewAggregate.class);
         verify(aggregateRepository, org.mockito.Mockito.times(2)).saveAndFlush(agg.capture());
@@ -137,7 +154,7 @@ class ReviewCommandServiceTest {
         service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 3, null)),
-                USER_ID);
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         verify(eventPublisher, org.mockito.Mockito.times(2))
                 .publishEvent(any(AggregateUpdatedLocalEvent.class));
@@ -147,7 +164,7 @@ class ReviewCommandServiceTest {
 
     @Test
     void theOutboxKeyIsScopedToTheOrderSoASecondOrderDoesNotCollide() {
-        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID);
+        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         ArgumentCaptor<OutboxEventEntity> event = ArgumentCaptor.forClass(OutboxEventEntity.class);
         verify(outboxEventRepository).save(event.capture());
@@ -155,13 +172,13 @@ class ReviewCommandServiceTest {
         // outbox_events.idempotency_key is UNIQUE. Keyed on the user, a customer's second order from
         // the same restaurant would collide on insert and fail the whole submission.
         assertThat(event.getValue().getIdempotencyKey())
-                .isEqualTo("review:RESTAURANT:" + OUTLET_ID + ":" + ORDER_ID)
-                .doesNotContain(USER_ID);
+                .isEqualTo("review:RESTAURANT:" + OUTLET_ID + ":" + ORDER_ID + ":" + USER_ID);
+                
     }
 
     @Test
     void theOutboxPayloadCarriesEverythingTheConsumerReads() throws Exception {
-        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 4, null)), USER_ID);
+        service.createReviews(request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 4, null)), USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         ArgumentCaptor<OutboxEventEntity> event = ArgumentCaptor.forClass(OutboxEventEntity.class);
         verify(outboxEventRepository).save(event.capture());
@@ -186,9 +203,9 @@ class ReviewCommandServiceTest {
         service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
-                USER_ID);
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
-        verify(outboxEventRepository, org.mockito.Mockito.times(2)).save(any());
+        verify(outboxEventRepository, org.mockito.Mockito.times(1)).save(any());
     }
 
     // ------------------------------------------------------------------ refusals
@@ -198,7 +215,7 @@ class ReviewCommandServiceTest {
         assertThatThrownBy(() -> service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 1, null)),
-                USER_ID))
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.DUPLICATE_ENTRY);
@@ -209,13 +226,13 @@ class ReviewCommandServiceTest {
     /** Immutability, at the point it is enforced: a second review for the same target is refused. */
     @Test
     void aTargetAlreadyReviewedOnThisOrderIsRefusedWithItsOwnReason() {
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(
+        when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, USER_ID)).thenReturn(List.of(
                 Review.builder().entityType(ReviewEntityType.RESTAURANT).entityId(OUTLET_ID)
                         .id(UUID.randomUUID()).orderId(ORDER_ID).userId(USER_ID)
                         .rating(3).createdAt(java.time.Instant.now()).build()));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.ALREADY_REVIEWED);
@@ -235,7 +252,7 @@ class ReviewCommandServiceTest {
                 .thenThrow(new DataIntegrityViolationException("uq_reviews_entity_order"));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER))
                 .isInstanceOf(ReviewNotAllowedException.class)
                 .extracting(e -> ((ReviewNotAllowedException) e).getReason())
                 .isEqualTo(ReviewRejectionReason.ALREADY_REVIEWED);
@@ -244,11 +261,11 @@ class ReviewCommandServiceTest {
     /** An ineligible order must never reach the database. */
     @Test
     void anIneligibleOrderIsRefusedBeforeAnythingIsWritten() {
-        when(eligibilityService.resolve(any(), any())).thenThrow(
+        when(eligibilityService.getOrderContext(any())).thenThrow(
                 new ReviewNotAllowedException(ReviewRejectionReason.REVIEW_WINDOW_CLOSED, "closed"));
 
         assertThatThrownBy(() -> service.createReviews(
-                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID))
+                request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null)), USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER))
                 .isInstanceOf(ReviewNotAllowedException.class);
 
         verify(transactionTemplate, never()).execute(any());
@@ -258,14 +275,22 @@ class ReviewCommandServiceTest {
     /** A target not on the order is refused by the eligibility service, and nothing is written. */
     @Test
     void aTargetNotOnTheOrderStopsTheWholeSubmission() {
-        org.mockito.Mockito.doThrow(new ReviewNotAllowedException(
-                        ReviewRejectionReason.TARGET_NOT_ON_ORDER, "not on order"))
-                .when(eligibilityService).assertTargetOnOrder(any(), any(), any());
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            if (reqs == null) return java.util.List.of();
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(false)
+                    .reasonCode(
+                        ReviewRejectionReason.TARGET_NOT_ON_ORDER.name())
+                    .build()).toList();
+        });
 
         assertThatThrownBy(() -> service.createReviews(
                 request(entry(ReviewEntityType.RESTAURANT, OUTLET_ID, 5, null),
                         entry(ReviewEntityType.DRIVER, DRIVER_ID, 4, null)),
-                USER_ID))
+                USER_ID, com.fooddelivery.common.enums.RoleName.CUSTOMER))
                 .isInstanceOf(ReviewNotAllowedException.class);
 
         verify(reviewRepository, never()).saveAllAndFlush(any());

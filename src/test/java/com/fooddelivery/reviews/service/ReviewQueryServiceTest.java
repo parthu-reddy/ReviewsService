@@ -29,6 +29,7 @@ import com.fooddelivery.reviews.repository.ReviewRepository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 /**
  * What the rating sheet is built from, and what a listing reads.
@@ -66,11 +67,11 @@ class ReviewQueryServiceTest {
      */
     @Test
     void aRefusalIsReturnedAsDataWithItsReason() {
-        when(eligibilityService.resolve(any(), any())).thenThrow(
+        lenient().when(eligibilityService.getOrderContext(any())).thenThrow(
                 new ReviewNotAllowedException(ReviewRejectionReason.REVIEW_WINDOW_CLOSED,
                         "The 14-day review window has closed."));
 
-        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
+        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         assertThat(result.isReviewable()).isFalse();
         assertThat(result.getReason()).isEqualTo(ReviewRejectionReason.REVIEW_WINDOW_CLOSED);
@@ -81,27 +82,45 @@ class ReviewQueryServiceTest {
 
     @Test
     void everyParticipantOnTheOrderBecomesATarget() {
-        when(eligibilityService.resolve(any(), any())).thenReturn(context(DISH_A, DISH_B));
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+        OrderReviewContextDto ctx = context(DISH_A, DISH_B);
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of());
 
-        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
+        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         assertThat(result.isReviewable()).isTrue();
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getEntityType)
-                .containsExactly(ReviewEntityType.RESTAURANT, ReviewEntityType.DRIVER,
+                .containsExactly(ReviewEntityType.CUSTOMER, ReviewEntityType.RESTAURANT, ReviewEntityType.DRIVER,
                         ReviewEntityType.PRODUCT, ReviewEntityType.PRODUCT);
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getDisplayName)
-                .containsExactly("Bombay Canteen", ReviewQueryService.DRIVER_DISPLAY_NAME,
+                .containsExactly("Customer", "Bombay Canteen", ReviewQueryService.DRIVER_DISPLAY_NAME,
                         "Butter Chicken", "Naan");
     }
 
     /** Ordering the same dish twice is still one reviewable dish. */
     @Test
     void aRepeatedDishCollapsesToASingleTarget() {
-        when(eligibilityService.resolve(any(), any())).thenReturn(context(DISH_A, DISH_A));
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+        OrderReviewContextDto ctx = context(DISH_A, DISH_A);
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of());
 
-        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
+        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         assertThat(result.getTargets()).filteredOn(t -> t.getEntityType() == ReviewEntityType.PRODUCT)
                 .hasSize(1);
@@ -112,10 +131,18 @@ class ReviewQueryServiceTest {
     void anOrderWithNoDriverOffersNoDriverTarget() {
         OrderReviewContextDto ctx = context(DISH_A);
         ctx.setDeliveryExecutiveId(null);
-        when(eligibilityService.resolve(any(), any())).thenReturn(ctx);
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of());
 
-        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
+        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         assertThat(result.getTargets()).extracting(ReviewTargetDto::getEntityType)
                 .doesNotContain(ReviewEntityType.DRIVER);
@@ -128,14 +155,23 @@ class ReviewQueryServiceTest {
     @Test
     void anAlreadyReviewedTargetCarriesTheReviewThatWasLeft() {
         Instant reviewedAt = Instant.parse("2026-09-05T12:00:00Z");
-        when(eligibilityService.resolve(any(), any())).thenReturn(context(DISH_A));
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of(
+        OrderReviewContextDto ctx = context(DISH_A);
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of(
                 Review.builder()
                         .entityType(ReviewEntityType.RESTAURANT).entityId(OUTLET_ID.toString())
                         .id(UUID.randomUUID()).orderId(ORDER_ID).userId(CUSTOMER_ID.toString())
                         .rating(4).comment("Quick and hot").createdAt(reviewedAt).build()));
 
-        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString());
+        ReviewEligibilityDto result = service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER);
 
         ReviewTargetDto restaurant = result.getTargets().stream()
                 .filter(t -> t.getEntityType() == ReviewEntityType.RESTAURANT).findFirst().orElseThrow();
@@ -154,11 +190,20 @@ class ReviewQueryServiceTest {
     @Test
     void theWindowClosingTimeIsReturnedSoTheSheetCanShowADeadline() {
         Instant closesAt = Instant.parse("2026-09-24T19:04:11Z");
-        when(eligibilityService.resolve(any(), any())).thenReturn(context(DISH_A));
-        when(eligibilityService.windowClosesAt(any())).thenReturn(closesAt);
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+        OrderReviewContextDto ctx = context(DISH_A);
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(eligibilityService.windowClosesAt(any())).thenReturn(closesAt);
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of());
 
-        assertThat(service().getEligibility(ORDER_ID, CUSTOMER_ID.toString()).getWindowClosesAt())
+        assertThat(service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER).getWindowClosesAt())
                 .isEqualTo(closesAt);
     }
 
@@ -167,10 +212,18 @@ class ReviewQueryServiceTest {
     void anUnnamedDishFallsBackToAReadableLabel() {
         OrderReviewContextDto ctx = context();
         ctx.setItems(List.of(OrderReviewItemDto.builder().menuItemId(DISH_A).name(null).build()));
-        when(eligibilityService.resolve(any(), any())).thenReturn(ctx);
-        when(reviewRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
+        lenient().when(eligibilityService.getOrderContext(any())).thenReturn(ctx);
+        lenient().when(eligibilityService.authorizeTargets(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.util.List<com.fooddelivery.common.dto.order.OrderReviewTargetAuthorizationRequest> reqs = inv.getArgument(3);
+            return reqs.stream().map(req -> com.fooddelivery.common.dto.order.OrderReviewAuthorizationResult.builder()
+                    .targetType(req.getTargetType())
+                    .targetId(req.getTargetId())
+                    .allowed(true)
+                    .build()).toList();
+        });
+        lenient().when(reviewRepository.findByOrderIdAndUserId(ORDER_ID, CUSTOMER_ID.toString())).thenReturn(List.of());
 
-        assertThat(service().getEligibility(ORDER_ID, CUSTOMER_ID.toString()).getTargets())
+        assertThat(service().getEligibility(ORDER_ID, CUSTOMER_ID.toString(), com.fooddelivery.common.enums.RoleName.CUSTOMER).getTargets())
                 .filteredOn(t -> t.getEntityType() == ReviewEntityType.PRODUCT)
                 .extracting(ReviewTargetDto::getDisplayName)
                 .containsExactly("Item");
@@ -185,7 +238,7 @@ class ReviewQueryServiceTest {
      */
     @Test
     void idsWithNoReviewsComeBackAsAnExplicitZero() {
-        when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 3, "4.33")));
+        lenient().when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 3, "4.33")));
 
         AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT,
                 List.of(DISH_A.toString(), DISH_B.toString()));
@@ -201,7 +254,7 @@ class ReviewQueryServiceTest {
 
     @Test
     void aRepeatedOrBlankIdIsRequestedOnlyOnce() {
-        when(aggregateRepository.findAllById(any())).thenReturn(List.of());
+        lenient().when(aggregateRepository.findAllById(any())).thenReturn(List.of());
 
         AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT,
                 java.util.Arrays.asList(DISH_A.toString(), DISH_A.toString(), "  ", null));
@@ -212,7 +265,7 @@ class ReviewQueryServiceTest {
 
     @Test
     void aKnownAggregateKeepsItsStoredAverage() {
-        when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 7, "4.29")));
+        lenient().when(aggregateRepository.findAllById(any())).thenReturn(List.of(withReviews(DISH_A, 7, "4.29")));
 
         AggregateBatchDto batch = service().getAggregates(ReviewEntityType.PRODUCT, List.of(DISH_A.toString()));
 

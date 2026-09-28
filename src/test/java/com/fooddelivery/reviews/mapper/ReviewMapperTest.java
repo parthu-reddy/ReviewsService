@@ -31,7 +31,7 @@ class ReviewMapperTest {
                 .id(REVIEW_ID)
                 .orderId(ORDER_ID)
                 .userId("customer-9")
-                .authorDisplayName("Priya R.")
+                .authorDisplayName("Priya R.").visibility(com.fooddelivery.reviews.enums.ReviewVisibility.PUBLIC)
                 .rating(4)
                 .comment("Hot and on time")
                 .createdAt(CREATED)
@@ -71,7 +71,7 @@ class ReviewMapperTest {
     void thePublicProjectionCarriesNoCommentWhenNoneWasLeft() {
         Review noComment = Review.builder()
                 .entityType(ReviewEntityType.RESTAURANT).entityId("e").id(REVIEW_ID).orderId(ORDER_ID)
-                .userId("u").authorDisplayName("Priya R.").rating(5).comment(null)
+                .userId("u").authorDisplayName("Priya R.").visibility(com.fooddelivery.reviews.enums.ReviewVisibility.PUBLIC).rating(5).comment(null)
                 .createdAt(CREATED).build();
 
         assertThat(ReviewMapper.toPublic(noComment).getComment()).isNull();
