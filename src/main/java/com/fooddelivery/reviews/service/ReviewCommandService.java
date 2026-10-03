@@ -135,8 +135,8 @@ public class ReviewCommandService {
         Instant createdAt = Instant.now();
         List<UUID> reviewIds = entries.stream().map(e -> UUID.randomUUID()).toList();
 
-        List<ReviewAggregateDto> updatedAggregates = new ArrayList<>();
         List<ReviewDetailDto> written = transactionTemplate.execute(status -> {
+            List<ReviewAggregateDto> updatedAggregates = new ArrayList<>();
             rejectAlreadyReviewed(request.getOrderId(), entries, authorId);
 
             List<ReviewDetailDto> results = new ArrayList<>();
@@ -226,14 +226,12 @@ public class ReviewCommandService {
                 writeOutboxEvent(reviewIds.get(i), request.getOrderId(), authorId, entry, aggregate, createdAt);
             }
 
+            // Register the AFTER_COMMIT callback while the transaction is still active. A rolled
+            // back submission must never invalidate the aggregate of an accepted review.
+            updatedAggregates.forEach(dto ->
+                    eventPublisher.publishEvent(new AggregateUpdatedLocalEvent(this, dto)));
             return results;
         });
-
-        // AFTER_COMMIT listeners evict the cached aggregate. Published outside the transaction
-        // template's lambda only in the sense that the events fire on commit; publishing here keeps
-        // the ordering obvious.
-        updatedAggregates.forEach(dto ->
-                eventPublisher.publishEvent(new AggregateUpdatedLocalEvent(this, dto)));
 
         log.info("Recorded {} review(s) for order={}", written == null ? 0 : written.size(),
                 request.getOrderId());

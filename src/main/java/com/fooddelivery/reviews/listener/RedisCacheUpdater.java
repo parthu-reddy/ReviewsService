@@ -5,12 +5,9 @@ import com.fooddelivery.reviews.event.AggregateUpdatedLocalEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-
-import java.time.Duration;
 
 import com.fooddelivery.reviews.service.ReviewQueryService;
 
@@ -21,7 +18,7 @@ public class RedisCacheUpdater {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    @Async
+    // Finish invalidation before the successful POST returns, so the next read sees the write.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAggregateUpdated(AggregateUpdatedLocalEvent event) {
         try {
