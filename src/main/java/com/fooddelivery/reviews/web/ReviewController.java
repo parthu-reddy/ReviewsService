@@ -204,11 +204,11 @@ public class ReviewController {
                     throw new IllegalArgumentException("An outletId is required for restaurant feedback.");
                 }
                 boolean ownsOutlet = restaurantServiceClient
-                        .getOwnerOutlets(authentication.getName(), "reviews-service")
+                        .getUserOutlets(java.util.UUID.fromString(authentication.getName()), com.fooddelivery.common.enums.OrganisationPermission.ORG_VIEW)
                         .stream()
-                        .anyMatch(outletId::equalsIgnoreCase);
+                        .anyMatch(id -> id.toString().equalsIgnoreCase(outletId));
                 if (!ownsOutlet) {
-                    throw new AccessDeniedException("This outlet does not belong to the authenticated restaurant owner.");
+                    throw new AccessDeniedException("This outlet does not belong to the authenticated organisation member.");
                 }
                 entityType = ReviewEntityType.RESTAURANT;
                 entityId = outletId;

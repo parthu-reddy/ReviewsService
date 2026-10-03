@@ -36,8 +36,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @ActiveProfiles("contract-test")
 @SpringBootTest(classes = ReviewsCustomerContractConsumerTest.TestConfig.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = "stubrunner.idsToServiceIds.food-delivery-backend=customer-service")
-@AutoConfigureStubRunner(ids = "com.fooddelivery:food-delivery-backend:+:stubs")
+        properties = {"stubrunner.idsToServiceIds.food-delivery-backend=customer-service",
+            "stubrunner.idsToServiceIds.restaurant-application=restaurant-service"})
+@AutoConfigureStubRunner(ids = {"com.fooddelivery:food-delivery-backend:+:stubs",
+    "com.fooddelivery:restaurant-application:+:stubs"})
 public class ReviewsCustomerContractConsumerTest {
 
     /** The order the published contract is written against. */
@@ -56,6 +58,17 @@ public class ReviewsCustomerContractConsumerTest {
 
     @Autowired
     private CustomerServiceClient customerServiceClient;
+
+    @Autowired private com.fooddelivery.common.client.RestaurantServiceClient restaurantServiceClient;
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.fooddelivery.common.client.RestaurantServiceClientFallback restaurantFallback;
+
+    @Test public void restaurantReceivedReviewsUseTheNamedMembersOutletListContract() {
+        var id=java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+        assertEquals(java.util.List.of(id),restaurantServiceClient.getUserOutlets(id,
+            com.fooddelivery.common.enums.OrganisationPermission.ORG_VIEW));
+        org.mockito.Mockito.verifyNoInteractions(restaurantFallback);
+    }
 
     @Test
     public void reviewContextMatchesThePublishedContract() {
